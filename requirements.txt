@@ -19,7 +19,7 @@ hydra-core
 python-dotenv
 pyrootutils
 wandb
-rich
+rich==14
 hydra-optuna-sweeper
 hydra-colorlog
 ase
