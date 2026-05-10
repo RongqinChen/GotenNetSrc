@@ -29,4 +29,4 @@ rdkit
 
 e3nn
 
-pip install rdkit==2025.3.6 python-dotenv hydra-core e3nn ase
+pip install rdkit==2025.3.6 hydra-core python-dotenv pyrootutils wandb rich==14 hydra-optuna-sweeper hydra-colorlog ase
