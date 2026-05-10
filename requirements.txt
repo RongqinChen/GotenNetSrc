@@ -19,12 +19,14 @@ hydra-core
 python-dotenv
 pyrootutils
 wandb
-rich==14
+rich
 hydra-optuna-sweeper
 hydra-colorlog
 ase
 scikit-learn
 pandas
-rdkit==2025.3.6
+rdkit
 
 e3nn
+
+pip install rdkit==2025.3.6 python-dotenv hydra-core e3nn ase

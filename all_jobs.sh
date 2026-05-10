@@ -1,6 +1,6 @@
 export CUDA_VISIBLE_DEVICES=0
 
-python train.py experiment=qm9.yaml label=mu
+# python train.py experiment=qm9.yaml label=mu
 python train.py experiment=qm9.yaml label=alpha
 python train.py experiment=qm9.yaml label=homo
 python train.py experiment=qm9.yaml label=lumo

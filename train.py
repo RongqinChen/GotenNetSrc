@@ -1,3 +1,19 @@
+import os
+os.environ['TORCH_LOAD_WEIGHTS_ONLY'] = '0'  # Disable weights_only
+import torch
+
+# Save the original function
+_original_torch_load = torch.load
+
+# Create a wrapper that defaults weights_only=False
+def patched_torch_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+
+# Replace torch.load with your patched version
+torch.load = patched_torch_load
+
+
 import dotenv
 import hydra
 import torch
