@@ -21,7 +21,7 @@ handlers:
     class: logging.FileHandler
     formatter: simple
     # relative to the job log directory
-    filename: ${hydra.job.name}.log
+    filename: logs/${hydra.job.name}.log
 root:
   level: INFO
   handlers: [console, file]

@@ -145,5 +145,5 @@ def print_config(
 
     rich.print(tree)
 
-    with open("config_tree.log", "w") as file:
+    with open("logs/config_tree.log", "w") as file:
         rich.print(tree, file=file)

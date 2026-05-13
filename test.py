@@ -1,3 +1,18 @@
+import os
+os.environ['TORCH_LOAD_WEIGHTS_ONLY'] = '0'  # Disable weights_only
+import torch
+
+# Save the original function
+_original_torch_load = torch.load
+
+# Create a wrapper that defaults weights_only=False
+def patched_torch_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+
+# Replace torch.load with your patched version
+torch.load = patched_torch_load
+
 import dotenv
 import hydra
 import torch
@@ -13,7 +28,7 @@ dotenv.load_dotenv(override=True)
 config_dir = find_config_directory()
 
 # Disable TF32 precision for CUDA operations
-torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 @hydra.main(version_base="1.3", config_path=config_dir, config_name="test.yaml")
