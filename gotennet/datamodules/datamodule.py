@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from gotennet import utils
 
+from .components.md22 import MD22
 from .components.qm9 import QM9
 from .components.rmd17 import rMD17
 from .components.utils import MissingLabelException, make_splits
@@ -286,6 +287,35 @@ class DataModule(LightningDataModule):
             dataset_arg=self.hparams["dataset_arg"],
             transform=transform
         )
+
+        train_size = self.hparams["train_size"]
+        val_size = self.hparams["val_size"]
+
+        idx_train, idx_val, idx_test = make_splits(
+            len(self.dataset),
+            train_size,
+            val_size,
+            None,
+            self.hparams["seed"],
+            join(self.hparams["output_dir"], "splits.npz"),
+            self.hparams["splits"],
+        )
+
+        return idx_train, idx_val, idx_test
+
+    def _prepare_MD22(self):
+        """
+        Load and prepare the MD22 dataset with appropriate splits.
+        
+        Unlike rMD17, MD22 does not provide pre-defined train/test splits.
+        Instead, standard random splits are used with sizes specified in the
+        configuration.
+        
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: 
+                Indices for train, validation, and test splits.
+        """
+        self.dataset = MD22(root=self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"])
 
         train_size = self.hparams["train_size"]
         val_size = self.hparams["val_size"]

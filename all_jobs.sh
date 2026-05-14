@@ -30,3 +30,12 @@ python train.py experiment=rmd17.yaml label=salicylic       logger=csv.yaml
 python train.py experiment=rmd17.yaml label=toluene         logger=csv.yaml
 python train.py experiment=rmd17.yaml label=uracil          logger=csv.yaml
 
+
+
+python train.py experiment=md22.yaml label=at_at                    logger=csv.yaml
+python train.py experiment=md22.yaml label=at_at_cg_cg              logger=csv.yaml
+python train.py experiment=md22.yaml label=ac_ala3_nhme             logger=csv.yaml
+python train.py experiment=md22.yaml label=dha                      logger=csv.yaml
+python train.py experiment=md22.yaml label=buckycatcher             logger=csv.yaml
+python train.py experiment=md22.yaml label=double_walled_nanotube   logger=csv.yaml
+python train.py experiment=md22.yaml label=stachyose                logger=csv.yaml

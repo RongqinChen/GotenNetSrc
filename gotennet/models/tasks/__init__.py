@@ -9,4 +9,5 @@ from gotennet.models.tasks.MDTask import MDTask
 TASK_DICT = {
     'QM9': QM9Task,      # QM9 quantum chemistry dataset
     'rMD17': MDTask,    # Revised MD17 dataset
+    'MD22': MDTask,     # MD22 molecular dynamics dataset
 }
