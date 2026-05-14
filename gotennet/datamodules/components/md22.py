@@ -98,7 +98,7 @@ class MD22(InMemoryDataset):
         self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
 
     def len(self):
-        return len(self.indices())
+        return self.data.y.size(0)
 
     @property
     def raw_file_names(self):
@@ -106,7 +106,7 @@ class MD22(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return f"md22-{self.dataset_tag}.pt"
+        return [f"md22-{self.dataset_tag}.pt"]
 
     @classmethod
     def _normalize_molecule_name(cls, molecule_name):
