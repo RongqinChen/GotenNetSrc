@@ -1,6 +1,8 @@
 import os
 import os.path as osp
 import tarfile
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 import numpy as np
 import requests
@@ -11,7 +13,10 @@ from tqdm import tqdm
 
 
 class rMD17(InMemoryDataset):
-    revised_url = 'https://ndownloader.figshare.com/files/23950376'
+    revised_url = 'https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/23950376/rmd17.tar.bz2'
+    download_chunk_size = 4 * 1024 * 1024
+    parallel_download_threshold = 64 * 1024 * 1024
+    download_timeout = (30, 600)
 
     molecule_files = dict(
         aspirin='rmd17_aspirin.npz',
@@ -75,46 +80,161 @@ class rMD17(InMemoryDataset):
     def processed_file_names(self):
         return [f"rmd17-{mol}.pt" for mol in self.molecules]
 
-    def download(self):
-        """Download the rMD17 dataset from figshare.
-
-        Uses requests instead of urllib because figshare's ndownloader URL
-        redirects to a short-lived S3 presigned URL. A separate HEAD request
-        to resolve that redirect often fails with 403, so the archive must be
-        streamed with a single GET request.
-        """
-        os.makedirs(self.raw_dir, exist_ok=True)
-        archive_name = 'rmd17.tar.bz2'
-        path = osp.join(self.raw_dir, archive_name)
-
+    @staticmethod
+    def _request_headers(byte_range=None):
         headers = {
             'User-Agent': (
                 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
                 '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             )
         }
-        session = requests.Session()
+        if byte_range is not None:
+            headers['Range'] = byte_range
+        return headers
+
+    @staticmethod
+    def _download_workers():
         try:
-            with session.get(
+            return max(1, min(32, int(os.environ.get('GOTENNET_RMD17_DOWNLOAD_WORKERS', '8'))))
+        except ValueError:
+            return 8
+
+    @classmethod
+    def _stream_response_to_file(cls, response, path, archive_name, total):
+        with open(path, 'wb') as f, tqdm(
+            desc=archive_name,
+            total=total,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for chunk in response.iter_content(chunk_size=cls.download_chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    bar.update(len(chunk))
+
+    @classmethod
+    def _download_range(cls, url, path, start, end, bar, bar_lock):
+        with requests.Session() as session, session.get(
+            url,
+            headers=cls._request_headers(f'bytes={start}-{end}'),
+            stream=True,
+            timeout=cls.download_timeout,
+        ) as response:
+            response.raise_for_status()
+            if response.status_code != 206:
+                raise RuntimeError(
+                    f"Expected HTTP 206 for range {start}-{end}, got {response.status_code}."
+                )
+            content_range = response.headers.get('content-range', '')
+            if not content_range.startswith(f'bytes {start}-'):
+                raise RuntimeError(
+                    f"Unexpected Content-Range header for bytes {start}-{end}: {content_range!r}."
+                )
+
+            with open(path, 'r+b') as f:
+                f.seek(start)
+                downloaded = 0
+                for chunk in response.iter_content(chunk_size=cls.download_chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        with bar_lock:
+                            bar.update(len(chunk))
+
+            expected = end - start + 1
+            if downloaded != expected:
+                raise RuntimeError(
+                    f"Range {start}-{end} downloaded {downloaded} bytes, expected {expected}."
+                )
+
+    @classmethod
+    def _parallel_download(cls, url, path, archive_name, total, workers):
+        part_size = (total + workers - 1) // workers
+        ranges = []
+        for worker_idx in range(workers):
+            start = worker_idx * part_size
+            end = min(total - 1, start + part_size - 1)
+            if start <= end:
+                ranges.append((start, end))
+
+        with open(path, 'wb') as f:
+            f.truncate(total)
+
+        bar_lock = Lock()
+        with tqdm(
+            desc=archive_name,
+            total=total,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            with ThreadPoolExecutor(max_workers=len(ranges)) as executor:
+                futures = [
+                    executor.submit(cls._download_range, url, path, start, end, bar, bar_lock)
+                    for start, end in ranges
+                ]
+                for future in futures:
+                    future.result()
+
+    @classmethod
+    def _single_stream_download(cls, url, path, archive_name):
+        with requests.Session() as session, session.get(
+            url,
+            headers=cls._request_headers(),
+            allow_redirects=True,
+            stream=True,
+            timeout=cls.download_timeout,
+        ) as response:
+            response.raise_for_status()
+            total = int(response.headers.get('content-length', 0))
+            cls._stream_response_to_file(response, path, archive_name, total)
+
+    def download(self):
+        """Download the rMD17 dataset from figshare.
+
+        Uses a probe GET instead of HEAD because figshare-style redirect URLs
+        can reject separate HEAD requests. When the resolved host advertises
+        ranged reads, large archives are downloaded in parallel to better
+        saturate available bandwidth; otherwise, it falls back to a single
+        streamed request.
+        """
+        os.makedirs(self.raw_dir, exist_ok=True)
+        archive_name = 'rmd17.tar.bz2'
+        path = osp.join(self.raw_dir, archive_name)
+
+        try:
+            with requests.Session() as session, session.get(
                 self.revised_url,
-                headers=headers,
+                headers=self._request_headers(),
                 allow_redirects=True,
                 stream=True,
-                timeout=(30, 600),   # (connect, read) timeouts
-            ) as resp:
-                resp.raise_for_status()
-                total = int(resp.headers.get('content-length', 0))
-                with open(path, 'wb') as f, tqdm(
-                    desc=archive_name,
-                    total=total,
-                    unit='B',
-                    unit_scale=True,
-                    unit_divisor=1024,
-                ) as bar:
-                    for chunk in resp.iter_content(chunk_size=8192):
-                        if chunk:   # skip keep-alive empty chunks
-                            f.write(chunk)
-                            bar.update(len(chunk))
+                timeout=self.download_timeout,
+            ) as response:
+                response.raise_for_status()
+                total = int(response.headers.get('content-length', 0))
+                resolved_url = response.url
+                supports_ranges = response.headers.get('accept-ranges', '').lower() == 'bytes'
+                workers = self._download_workers()
+                should_parallelize = (
+                    supports_ranges
+                    and total >= self.parallel_download_threshold
+                    and workers > 1
+                )
+
+                if should_parallelize:
+                    response.close()
+                    try:
+                        self._parallel_download(resolved_url, path, archive_name, total, workers)
+                    except Exception as exc:
+                        if osp.exists(path):
+                            os.unlink(path)
+                        rank_zero_warn(
+                            f"Parallel rMD17 download failed ({exc}). Falling back to a single-stream download."
+                        )
+                        self._single_stream_download(self.revised_url, path, archive_name)
+                else:
+                    self._stream_response_to_file(response, path, archive_name, total)
         except Exception:
             if osp.exists(path):
                 os.unlink(path)
