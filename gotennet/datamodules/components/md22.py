@@ -1,6 +1,8 @@
 import json
 import os
 import os.path as osp
+import shlex
+import subprocess
 
 import requests
 import torch
@@ -30,7 +32,7 @@ class MD22(InMemoryDataset):
 
     hf_api_base = "https://huggingface.co/api/datasets"
     hf_resolve_base = "https://huggingface.co/datasets"
-    download_chunk_size = 4 * 1024 * 1024
+    download_chunk_size = 512 * 1024
     download_timeout = (30, 600)
     process_batch_size = 256
 
@@ -96,7 +98,7 @@ class MD22(InMemoryDataset):
         self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
 
     def len(self):
-        return self.data.y.size(0)
+        return len(self.indices())
 
     @property
     def raw_file_names(self):
@@ -121,6 +123,46 @@ class MD22(InMemoryDataset):
         }
 
     @classmethod
+    def _curl_args(cls):
+        return [
+            "curl",
+            "-L",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--connect-timeout",
+            str(cls.download_timeout[0]),
+            "--max-time",
+            str(cls.download_timeout[1]),
+            "--retry",
+            "5",
+            "--retry-delay",
+            "2",
+            "-A",
+            cls._request_headers()["User-Agent"],
+        ]
+
+    @classmethod
+    def _run_curl(cls, args, capture_output=False):
+        command = " ".join(shlex.quote(arg) for arg in args)
+        shell_path = os.environ.get("SHELL", "/bin/zsh")
+        return subprocess.run(
+            [shell_path, "-lc", command],
+            check=True,
+            capture_output=capture_output,
+            text=capture_output,
+        )
+
+    @classmethod
+    def _curl_get_json(cls, url):
+        result = cls._run_curl([*cls._curl_args(), url], capture_output=True)
+        return json.loads(result.stdout)
+
+    @classmethod
+    def _curl_download_file(cls, url, path):
+        cls._run_curl([*cls._curl_args(), "-o", path, url])
+
+    @classmethod
     def _dataset_api_url(cls, repo_id):
         return f"{cls.hf_api_base}/{repo_id}"
 
@@ -136,13 +178,21 @@ class MD22(InMemoryDataset):
 
     @classmethod
     def _fetch_repo_manifest(cls, repo_id):
-        response = requests.get(
-            cls._dataset_api_url(repo_id),
-            headers=cls._request_headers(),
-            timeout=cls.download_timeout,
-        )
-        response.raise_for_status()
-        metadata = response.json()
+        try:
+            response = requests.get(
+                cls._dataset_api_url(repo_id),
+                headers=cls._request_headers(),
+                timeout=cls.download_timeout,
+            )
+            response.raise_for_status()
+            metadata = response.json()
+        except requests.RequestException as exc:
+            rank_zero_warn(
+                f"Requests failed to fetch MD22 metadata for {repo_id} ({exc}). "
+                "Falling back to curl."
+            )
+            metadata = cls._curl_get_json(cls._dataset_api_url(repo_id))
+
         parquet_files = sorted(
             sibling["rfilename"]
             for sibling in metadata.get("siblings", [])
@@ -163,6 +213,19 @@ class MD22(InMemoryDataset):
             return json.load(handle)
 
     @classmethod
+    def _is_valid_parquet_cache(cls, path):
+        try:
+            if not osp.exists(path) or osp.getsize(path) < 8:
+                return False
+            with open(path, "rb") as handle:
+                header = handle.read(4)
+                handle.seek(-4, os.SEEK_END)
+                footer = handle.read(4)
+            return header == b"PAR1" and footer == b"PAR1"
+        except OSError:
+            return False
+
+    @classmethod
     def _manifest_complete(cls, manifest_path):
         if not osp.exists(manifest_path):
             return False
@@ -181,32 +244,41 @@ class MD22(InMemoryDataset):
             local_path = osp.join(molecule_dir, relative_path)
             if not osp.exists(local_path) or osp.getsize(local_path) == 0:
                 return False
+            if relative_path.endswith(".parquet") and not cls._is_valid_parquet_cache(local_path):
+                return False
 
         return True
 
     @classmethod
     def _download_single_file(cls, url, path, description):
-        with requests.get(
-            url,
-            headers=cls._request_headers(),
-            allow_redirects=True,
-            stream=True,
-            timeout=cls.download_timeout,
-        ) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("content-length", 0))
+        try:
+            with requests.get(
+                url,
+                headers=cls._request_headers(),
+                allow_redirects=True,
+                stream=True,
+                timeout=cls.download_timeout,
+            ) as response:
+                response.raise_for_status()
+                total = int(response.headers.get("content-length", 0))
 
-            with open(path, "wb") as handle, tqdm(
-                desc=description,
-                total=total,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
-                for chunk in response.iter_content(chunk_size=cls.download_chunk_size):
-                    if chunk:
-                        handle.write(chunk)
-                        bar.update(len(chunk))
+                with open(path, "wb") as handle, tqdm(
+                    desc=description,
+                    total=total,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                ) as bar:
+                    for chunk in response.iter_content(chunk_size=cls.download_chunk_size):
+                        if chunk:
+                            handle.write(chunk)
+                            bar.update(len(chunk))
+        except requests.RequestException as exc:
+            rank_zero_warn(
+                f"Requests failed to download {description} ({exc}). "
+                "Falling back to curl."
+            )
+            cls._curl_download_file(url, path)
 
         if osp.getsize(path) == 0:
             raise RuntimeError(f"Downloaded file {path} is empty.")
@@ -229,8 +301,18 @@ class MD22(InMemoryDataset):
                 local_path = osp.join(molecule_dir, relative_path)
                 os.makedirs(osp.dirname(local_path), exist_ok=True)
 
-                if osp.exists(local_path) and osp.getsize(local_path) > 0:
+                if (
+                    osp.exists(local_path)
+                    and osp.getsize(local_path) > 0
+                    and (
+                        not relative_path.endswith(".parquet")
+                        or self._is_valid_parquet_cache(local_path)
+                    )
+                ):
                     continue
+
+                if osp.exists(local_path):
+                    os.unlink(local_path)
 
                 url = self._dataset_file_url(repo_id, manifest["revision"], relative_path)
                 try:
@@ -244,12 +326,22 @@ class MD22(InMemoryDataset):
                         os.unlink(local_path)
                     raise
 
+                if relative_path.endswith(".parquet") and not self._is_valid_parquet_cache(local_path):
+                    if osp.exists(local_path):
+                        os.unlink(local_path)
+                    raise RuntimeError(
+                        f"Downloaded parquet shard is incomplete or corrupted: {local_path}"
+                    )
+
             with open(manifest_path, "w", encoding="utf-8") as handle:
                 json.dump(manifest, handle, indent=2, sort_keys=True)
 
     @classmethod
     def _validate_parquet_columns(cls, parquet_path, parquet_file):
-        available_columns = set(parquet_file.schema.names)
+        if hasattr(parquet_file, "schema_arrow"):
+            available_columns = set(parquet_file.schema_arrow.names)
+        else:
+            available_columns = set(parquet_file.schema.to_arrow_schema().names)
         missing_columns = [
             column_name for column_name in cls.required_columns if column_name not in available_columns
         ]
@@ -269,7 +361,15 @@ class MD22(InMemoryDataset):
         samples = []
 
         for molecule_name in self.molecules:
-            manifest = self._load_manifest(self._manifest_path(molecule_name))
+            manifest_path = self._manifest_path(molecule_name)
+            if not self._manifest_complete(manifest_path):
+                rank_zero_warn(
+                    f"MD22 cache for {molecule_name} is incomplete or corrupted. "
+                    "Re-downloading raw parquet shards."
+                )
+                self.download()
+
+            manifest = self._load_manifest(manifest_path)
             molecule_dir = self._raw_molecule_dir(molecule_name)
 
             for relative_path in manifest["parquet_files"]:

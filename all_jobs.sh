@@ -32,10 +32,10 @@ python train.py experiment=rmd17.yaml label=uracil          logger=csv.yaml
 
 
 
-python train.py experiment=md22.yaml label=at_at                    logger=csv.yaml
-python train.py experiment=md22.yaml label=at_at_cg_cg              logger=csv.yaml
-python train.py experiment=md22.yaml label=ac_ala3_nhme             logger=csv.yaml
-python train.py experiment=md22.yaml label=dha                      logger=csv.yaml
-python train.py experiment=md22.yaml label=buckycatcher             logger=csv.yaml
-python train.py experiment=md22.yaml label=double_walled_nanotube   logger=csv.yaml
-python train.py experiment=md22.yaml label=stachyose                logger=csv.yaml
+python train.py experiment=md22.yaml logger=csv.yaml label=at_at                    datamodule.hparams.dataset_arg=at_at 
+python train.py experiment=md22.yaml logger=csv.yaml label=at_at_cg_cg              datamodule.hparams.dataset_arg=at_at_cg_cg 
+python train.py experiment=md22.yaml logger=csv.yaml label=ac_ala3_nhme             datamodule.hparams.dataset_arg=ac_ala3_nhme 
+python train.py experiment=md22.yaml logger=csv.yaml label=dha                      datamodule.hparams.dataset_arg=dha 
+python train.py experiment=md22.yaml logger=csv.yaml label=buckycatcher             datamodule.hparams.dataset_arg=buckycatcher 
+python train.py experiment=md22.yaml logger=csv.yaml label=double_walled_nanotube   datamodule.hparams.dataset_arg=double_walled_nanotube 
+python train.py experiment=md22.yaml logger=csv.yaml label=stachyose                datamodule.hparams.dataset_arg=stachyose 

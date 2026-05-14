@@ -5,7 +5,7 @@ import hydra
 import torch.multiprocessing
 from lightning import Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import (
     Callback,
     LightningDataModule,
@@ -70,6 +70,22 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         else None
     )
 
+    # torch_cluster's radius_graph backend used by GotenNet does not support MPS.
+    # On Apple machines without CUDA, force Lightning to run on CPU instead of
+    # selecting MPS automatically and crashing during the first training step.
+    mps_backend = getattr(torch.backends, "mps", None)
+    mps_available = bool(mps_backend and mps_backend.is_available())
+    trainer_cfg = OmegaConf.create(OmegaConf.to_container(cfg.trainer, resolve=True))
+    trainer_accelerator = trainer_cfg.get("accelerator", "auto")
+    if mps_available and not torch.cuda.is_available() and trainer_accelerator in ("auto", "gpu", "mps"):
+        log.warning(
+            "MPS was detected, but torch_cluster.radius_graph requires CPU or CUDA. "
+            "Falling back to CPU training."
+        )
+        trainer_cfg.accelerator = "cpu"
+        trainer_cfg.devices = 1
+        trainer_cfg.strategy = "auto"
+
     # Init lightning model
     log.info(f"Instantiating model <{cfg.model._target_}>")
 
@@ -100,7 +116,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
 
     # profiler = PyTorchProfiler()
     trainer: Trainer = hydra.utils.instantiate(
-        cfg.trainer,
+        trainer_cfg,
         callbacks=callbacks,
         logger=logger,
         _convert_="partial",
