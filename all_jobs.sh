@@ -14,3 +14,16 @@ python train.py experiment=qm9.yaml label=H     logger=csv.yaml
 python train.py experiment=qm9.yaml label=U     logger=csv.yaml
 python train.py experiment=qm9.yaml label=U0    logger=csv.yaml
 python train.py experiment=qm9.yaml label=zpve  logger=csv.yaml
+
+
+python train.py experiment=rmd17.yaml label=aspirin         logger=csv.yaml
+python train.py experiment=rmd17.yaml label=azobenzene      logger=csv.yaml
+python train.py experiment=rmd17.yaml label=benzene         logger=csv.yaml
+python train.py experiment=rmd17.yaml label=ethanol         logger=csv.yaml
+python train.py experiment=rmd17.yaml label=malonaldehyde   logger=csv.yaml
+python train.py experiment=rmd17.yaml label=naphthalene     logger=csv.yaml
+python train.py experiment=rmd17.yaml label=paracetamol     logger=csv.yaml
+python train.py experiment=rmd17.yaml label=salicylic       logger=csv.yaml
+python train.py experiment=rmd17.yaml label=toluene         logger=csv.yaml
+python train.py experiment=rmd17.yaml label=uracil          logger=csv.yaml
+
