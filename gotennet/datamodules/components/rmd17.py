@@ -78,9 +78,10 @@ class rMD17(InMemoryDataset):
     def download(self):
         """Download the rMD17 dataset from figshare.
 
-        Uses requests instead of urllib because figshare's ndownloader
-        URL redirects to an S3 bucket, which urllib.urlretrieve does not
-        handle reliably (often resulting in 0-byte files or 403 errors).
+        Uses requests instead of urllib because figshare's ndownloader URL
+        redirects to a short-lived S3 presigned URL. A separate HEAD request
+        to resolve that redirect often fails with 403, so the archive must be
+        streamed with a single GET request.
         """
         os.makedirs(self.raw_dir, exist_ok=True)
         archive_name = 'rmd17.tar.bz2'
@@ -92,54 +93,32 @@ class rMD17(InMemoryDataset):
                 '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             )
         }
-
-
-
-
-
-
-
-
-
-
-        # ------------------------------------------------------------------
-        # 1.  Resolve the redirect chain first to get the final S3 URL.
-        #     Figshare's ndownloader URL -> 302 -> S3 presigned URL.
-        # ------------------------------------------------------------------
         session = requests.Session()
-        head_resp = session.head(
-            self.revised_url,
-            headers=headers,
-            allow_redirects=True,
-            timeout=30,
-        )
-        head_resp.raise_for_status()
-        final_url = head_resp.url  # the resolved S3 presigned URL
-
-        # ------------------------------------------------------------------
-        # 2.  Stream the actual file from the resolved URL.
-        # ------------------------------------------------------------------
-        with session.get(
-            final_url,
-            headers=headers,
-            stream=True,
-            timeout=(30, 600),   # (connect, read) timeouts
-        ) as resp:
-            resp.raise_for_status()
-            total = int(resp.headers.get('content-length', 0))
-            with open(path, 'wb') as f, tqdm(
-                desc=archive_name,
-                total=total,
-                unit='B',
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
-                for chunk in resp.iter_content(chunk_size=8192):
-
-
-                    if chunk:   # skip keep-alive empty chunks
-                        f.write(chunk)
-                        bar.update(len(chunk))
+        try:
+            with session.get(
+                self.revised_url,
+                headers=headers,
+                allow_redirects=True,
+                stream=True,
+                timeout=(30, 600),   # (connect, read) timeouts
+            ) as resp:
+                resp.raise_for_status()
+                total = int(resp.headers.get('content-length', 0))
+                with open(path, 'wb') as f, tqdm(
+                    desc=archive_name,
+                    total=total,
+                    unit='B',
+                    unit_scale=True,
+                    unit_divisor=1024,
+                ) as bar:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        if chunk:   # skip keep-alive empty chunks
+                            f.write(chunk)
+                            bar.update(len(chunk))
+        except Exception:
+            if osp.exists(path):
+                os.unlink(path)
+            raise
 
         if osp.getsize(path) == 0:
             os.unlink(path)
@@ -151,16 +130,12 @@ class rMD17(InMemoryDataset):
         #     version-specific quirks with bz2 mode).
         # ------------------------------------------------------------------
         try:
-
             try:
                 extract_tar(path, self.raw_dir, mode='r:bz2')
             except TypeError:
                 # Older PyG versions don't accept 'mode' as a keyword.
                 extract_tar(path, self.raw_dir)
         except Exception:
-
-
-
             # Fallback: use Python's tarfile directly.
             try:
                 with tarfile.open(path, mode='r:bz2') as tf:
