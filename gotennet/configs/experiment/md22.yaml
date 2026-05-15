@@ -36,16 +36,16 @@ model:
 
   representation:
     n_interactions: 16
-    n_atom_basis: 192
+    n_atom_basis: 64
     radial_basis: "expnorm"
     n_rbf: 32
     edge_updates: "linw_mlpa"
     lmax: 2
-    evec_dim: 768
-    emlp_dim: 768
+    evec_dim: 64
+    emlp_dim: 64
 
   output:
-    n_hidden: 256
+    n_hidden: 64
 
 
 trainer:
