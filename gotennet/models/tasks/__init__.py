@@ -4,10 +4,12 @@ from __future__ import absolute_import, division, print_function
 
 from gotennet.models.tasks.QM9Task import QM9Task
 from gotennet.models.tasks.MDTask import MDTask
+from gotennet.models.tasks.Molecule3DTask import Molecule3DTask
 
 # Dictionary mapping task names to their implementations
 TASK_DICT = {
-    'QM9': QM9Task,      # QM9 quantum chemistry dataset
-    'rMD17': MDTask,    # Revised MD17 dataset
-    'MD22': MDTask,     # MD22 molecular dynamics dataset
+    'QM9': QM9Task,                # QM9 quantum chemistry dataset
+    'rMD17': MDTask,               # Revised MD17 dataset
+    'MD22': MDTask,                # MD22 molecular dynamics dataset
+    'Molecule3D': Molecule3DTask,  # Molecule3D quantum chemistry dataset
 }

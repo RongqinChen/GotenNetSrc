@@ -11,6 +11,7 @@ from tqdm import tqdm
 from gotennet import utils
 
 from .components.md22 import MD22
+from .components.molecule3d import Molecule3D
 from .components.qm9 import QM9
 from .components.rmd17 import rMD17
 from .components.utils import MissingLabelException, make_splits
@@ -328,6 +329,54 @@ class DataModule(LightningDataModule):
             self.hparams["seed"],
             join(self.hparams["output_dir"], "splits.npz"),
             self.hparams["splits"],
+        )
+
+        return idx_train, idx_val, idx_test
+
+    def _prepare_Molecule3D(self):
+        """
+        Load and prepare the Molecule3D dataset with pre-defined splits.
+
+        Molecule3D provides pre-defined train/validation/test splits via
+        its Hugging Face config. The method loads the dataset and extracts
+        these split indices.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                Indices for train, validation, and test splits.
+        """
+        split_config = self.hparams.get("split_config", "Molecule3D_random_split")
+
+        self.dataset = Molecule3D(
+            root=self.hparams["dataset_root"],
+            dataset_arg=self.hparams["dataset_arg"],
+            split_config=split_config,
+        )
+
+        train_size = self.hparams["train_size"]
+        val_size = self.hparams["val_size"]
+
+        idx_train_full, idx_val_full, idx_test = self.dataset.get_split()
+
+        idx_train_full = torch.tensor(idx_train_full)
+        idx_val_full = torch.tensor(idx_val_full)
+        idx_test = torch.tensor(idx_test)
+
+        # Use only a subset of the pre-defined train/val sets based on
+        # the configured sizes.
+        if train_size is not None and train_size < len(idx_train_full):
+            idx_train = idx_train_full[:train_size]
+        else:
+            idx_train = idx_train_full
+
+        if val_size is not None and val_size < len(idx_val_full):
+            idx_val = idx_val_full[:val_size]
+        else:
+            idx_val = idx_val_full
+
+        log.info(
+            f"Molecule3D splits: train {len(idx_train)}, "
+            f"val {len(idx_val)}, test {len(idx_test)}"
         )
 
         return idx_train, idx_val, idx_test

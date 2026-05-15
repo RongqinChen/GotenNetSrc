@@ -15,7 +15,6 @@ python train.py experiment=qm9.yaml label=U     logger=csv.yaml
 python train.py experiment=qm9.yaml label=U0    logger=csv.yaml
 python train.py experiment=qm9.yaml label=zpve  logger=csv.yaml
 
-
 python train.py experiment=rmd17.yaml label=aspirin         logger=csv.yaml
 python train.py experiment=rmd17.yaml label=azobenzene      logger=csv.yaml
 python train.py experiment=rmd17.yaml label=benzene         logger=csv.yaml
@@ -39,3 +38,11 @@ python train.py experiment=md22.yaml logger=csv.yaml label=dha                  
 python train.py experiment=md22.yaml logger=csv.yaml label=buckycatcher             datamodule.hparams.dataset_arg=buckycatcher 
 python train.py experiment=md22.yaml logger=csv.yaml label=double_walled_nanotube   datamodule.hparams.dataset_arg=double_walled_nanotube 
 python train.py experiment=md22.yaml logger=csv.yaml label=stachyose                datamodule.hparams.dataset_arg=stachyose 
+
+python train.py experiment=molecule3d.yaml label=homo        logger=csv.yaml
+python train.py experiment=molecule3d.yaml label=lumo        logger=csv.yaml
+python train.py experiment=molecule3d.yaml label=gap         logger=csv.yaml
+python train.py experiment=molecule3d.yaml label=scf_energy  logger=csv.yaml
+python train.py experiment=molecule3d.yaml label=dipole_x    logger=csv.yaml
+python train.py experiment=molecule3d.yaml label=dipole_y    logger=csv.yaml
+python train.py experiment=molecule3d.yaml label=dipole_z    logger=csv.yaml
