@@ -585,6 +585,42 @@ class Molecule3D(InMemoryDataset):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _normalize_sdf_block(sdf_string: str) -> str:
+        """Normalize MolBlock headers so RDKit can parse Hugging Face rows.
+
+        Some Molecule3D parquet rows contain only two MolBlock header lines:
+        the program line, a blank line, and then the counts line. RDKit expects
+        the counts line on line 4, so it interprets the first atom line as the
+        counts line and fails with messages like
+        ``Cannot convert '-1.' to unsigned int on line 4``.
+
+        This helper pads the header to three lines when the counts line appears
+        too early, preserving already-valid blocks.
+        """
+        if not sdf_string:
+            return sdf_string
+
+        lines = sdf_string.splitlines()
+        counts_idx = next(
+            (
+                idx
+                for idx, line in enumerate(lines[:4])
+                if "V2000" in line or "V3000" in line
+            ),
+            None,
+        )
+
+        if counts_idx is None or counts_idx >= 3:
+            return sdf_string
+
+        normalized_lines = [""] * (3 - counts_idx) + list(lines)
+
+        normalized = "\n".join(normalized_lines)
+        if sdf_string.endswith(("\n", "\r")):
+            normalized += "\n"
+        return normalized
+
+    @staticmethod
     def _parse_sdf_to_graph(sdf_string):
         """Parse an SDF (V2000/V3000) string into atomic numbers and positions.
 
@@ -602,6 +638,7 @@ class Molecule3D(InMemoryDataset):
             )
 
         try:
+            sdf_string = Molecule3D._normalize_sdf_block(sdf_string)
             mol = Chem.MolFromMolBlock(sdf_string, removeHs=False, sanitize=True)
             if mol is None:
                 return None, None
