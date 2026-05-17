@@ -6,7 +6,7 @@ model_checkpoint:
   save_last: True # additionaly always save model from last epoch
   verbose: False
   dirpath: ${paths.output_dir}/checkpoints
-  filename: "epoch_{epoch:03d}"
+  filename: "epoch_{epoch:04d}"
   auto_insert_metric_name: False
 
 early_stopping:

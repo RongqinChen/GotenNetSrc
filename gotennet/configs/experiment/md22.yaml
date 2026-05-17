@@ -1,8 +1,5 @@
 # @package _global_
 
-# to execute this experiment run:
-# python train.py experiment=md22
-
 defaults:
   - override /datamodule: md22.yaml
   - override /model: gotennet.yaml

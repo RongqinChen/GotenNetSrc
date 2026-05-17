@@ -16,7 +16,7 @@ hparams:
   test_size: null
   num_workers: 4
   seed: 1
-  output_dir: ${paths.output_dir}
+  output_dir: ${paths.output_dir}/rmd17
   ngpus: 1
   num_nodes: 1
   precision: 32

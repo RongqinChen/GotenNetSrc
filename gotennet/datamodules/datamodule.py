@@ -1,4 +1,4 @@
-from os.path import join
+import os.path
 from typing import Any, Dict, Optional, Union
 
 import torch
@@ -22,10 +22,10 @@ log = utils.get_logger(__name__)
 def normalize_positions(batch):
     """
     Normalize positions by subtracting center of mass.
-    
+
     Args:
         batch: Data batch with position information.
-        
+
     Returns:
         batch: Batch with normalized positions.
     """
@@ -37,7 +37,7 @@ def normalize_positions(batch):
 class DataModule(LightningDataModule):
     """
     DataModule for handling various molecular datasets.
-    
+
     This class provides a unified interface for loading, splitting, and
     standardizing different types of molecular datasets.
     """
@@ -45,7 +45,7 @@ class DataModule(LightningDataModule):
     def __init__(self, hparams: Union[Dict, Any]):
         """
         Initialize the DataModule with configuration parameters.
-        
+
         Args:
             hparams: Hyperparameters for the datamodule.
         """
@@ -70,10 +70,10 @@ class DataModule(LightningDataModule):
     def get_metadata(self, label: Optional[str] = None) -> Dict:
         """
         Get metadata about the dataset.
-        
+
         Args:
             label: Optional label to set as dataset_arg.
-            
+
         Returns:
             Dict containing dataset metadata.
         """
@@ -85,33 +85,36 @@ class DataModule(LightningDataModule):
             self.loaded = True
 
         return {
-            'atomref': self.atomref,
-            'dataset': self.dataset,
-            'mean': self.mean,
-            'std': self.std
+            "atomref": self.atomref,
+            "dataset": self.dataset,
+            "mean": self.mean,
+            "std": self.std,
         }
 
     def prepare_dataset(self):
         """
         Prepare the dataset for training, validation, and testing.
-        
+
         Loads the appropriate dataset based on the configuration and
         creates the train/val/test splits.
-        
+
         Raises:
             AssertionError: If the specified dataset type is not supported.
         """
-        dataset_type = self.hparams['dataset']
+        dataset_type = self.hparams["dataset"]
 
         # Validate dataset type is supported
-        assert hasattr(self, f"_prepare_{dataset_type}"), \
-            f"Dataset {dataset_type} not defined"
+        assert hasattr(
+            self, f"_prepare_{dataset_type}"
+        ), f"Dataset {dataset_type} not defined"
 
         # Call the appropriate dataset preparation method
         dataset_preparer = lambda t: getattr(self, f"_prepare_{t}")()
         self.idx_train, self.idx_val, self.idx_test = dataset_preparer(dataset_type)
 
-        log.info(f"train {len(self.idx_train)}, val {len(self.idx_val)}, test {len(self.idx_test)}")
+        log.info(
+            f"train {len(self.idx_train)}, val {len(self.idx_val)}, test {len(self.idx_test)}"
+        )
 
         # Set up dataset subsets
         self.train_dataset = self.dataset[self.idx_train]
@@ -125,7 +128,7 @@ class DataModule(LightningDataModule):
     def train_dataloader(self):
         """
         Get the training dataloader.
-        
+
         Returns:
             DataLoader for training data.
         """
@@ -134,7 +137,7 @@ class DataModule(LightningDataModule):
     def val_dataloader(self):
         """
         Get the validation dataloader.
-        
+
         Returns:
             DataLoader for validation data.
         """
@@ -143,7 +146,7 @@ class DataModule(LightningDataModule):
     def test_dataloader(self):
         """
         Get the test dataloader.
-        
+
         Returns:
             DataLoader for test data.
         """
@@ -153,7 +156,7 @@ class DataModule(LightningDataModule):
     def atomref(self):
         """
         Get atom reference values if available.
-        
+
         Returns:
             Atom reference values or None.
         """
@@ -165,7 +168,7 @@ class DataModule(LightningDataModule):
     def mean(self):
         """
         Get mean value for standardization.
-        
+
         Returns:
             Mean value.
         """
@@ -175,30 +178,25 @@ class DataModule(LightningDataModule):
     def std(self):
         """
         Get standard deviation value for standardization.
-        
+
         Returns:
             Standard deviation value.
         """
         return self._std
 
-    def _get_dataloader(
-        self,
-        dataset,
-        stage: str,
-        store_dataloader: bool = True
-    ):
+    def _get_dataloader(self, dataset, stage: str, store_dataloader: bool = True):
         """
         Create a dataloader for the given dataset and stage.
-        
+
         Args:
             dataset: The dataset to create a dataloader for.
             stage: The stage ('train', 'val', or 'test').
             store_dataloader: Whether to store the dataloader for reuse.
-            
+
         Returns:
             DataLoader for the dataset.
         """
-        store_dataloader = (store_dataloader and not self.hparams["reload"])
+        store_dataloader = store_dataloader and not self.hparams["reload"]
         if stage in self._saved_dataloaders and store_dataloader:
             return self._saved_dataloaders[stage]
 
@@ -225,11 +223,12 @@ class DataModule(LightningDataModule):
     def _standardize(self):
         """
         Standardize the dataset by computing mean and standard deviation.
-        
+
         This method computes the mean and standard deviation of the dataset
         for standardization purposes. It handles different standardization
         approaches based on the configuration.
         """
+
         def get_label(batch, atomref):
             """
             Extract label from batch, accounting for atom references if provided.
@@ -238,7 +237,7 @@ class DataModule(LightningDataModule):
                 raise MissingLabelException()
 
             dy = None
-            if 'dy' in batch:
+            if "dy" in batch:
                 dy = batch.dy.squeeze().clone()
 
             if atomref is None:
@@ -253,7 +252,9 @@ class DataModule(LightningDataModule):
             desc="computing mean and std",
         )
         try:
-            atomref = self.atomref if self.hparams.get("prior_model") == "Atomref" else None
+            atomref = (
+                self.atomref if self.hparams.get("prior_model") == "Atomref" else None
+            )
             ys = [get_label(batch, atomref) for batch in data]
             # Convert array with n elements and each element contains 2 values
             # to array of two elements with n values
@@ -273,9 +274,9 @@ class DataModule(LightningDataModule):
     def _prepare_QM9(self):
         """
         Load and prepare the QM9 dataset with appropriate splits.
-        
+
         Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: 
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
                 Indices for train, validation, and test splits.
         """
         # Apply position normalization if requested
@@ -286,7 +287,7 @@ class DataModule(LightningDataModule):
         self.dataset = QM9(
             root=self.hparams["dataset_root"],
             dataset_arg=self.hparams["dataset_arg"],
-            transform=transform
+            transform=transform,
         )
 
         train_size = self.hparams["train_size"]
@@ -298,7 +299,7 @@ class DataModule(LightningDataModule):
             val_size,
             None,
             self.hparams["seed"],
-            join(self.hparams["output_dir"], "splits.npz"),
+            os.path.join(self.hparams["output_dir"], "splits.npz"),
             self.hparams["splits"],
         )
 
@@ -307,16 +308,18 @@ class DataModule(LightningDataModule):
     def _prepare_MD22(self):
         """
         Load and prepare the MD22 dataset with appropriate splits.
-        
+
         Unlike rMD17, MD22 does not provide pre-defined train/test splits.
         Instead, standard random splits are used with sizes specified in the
         configuration.
-        
+
         Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: 
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
                 Indices for train, validation, and test splits.
         """
-        self.dataset = MD22(root=self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"])
+        self.dataset = MD22(
+            root=self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"]
+        )
 
         train_size = self.hparams["train_size"]
         val_size = self.hparams["val_size"]
@@ -327,7 +330,7 @@ class DataModule(LightningDataModule):
             val_size,
             None,
             self.hparams["seed"],
-            join(self.hparams["output_dir"], "splits.npz"),
+            os.path.join(self.hparams["output_dir"], "splits.npz"),
             self.hparams["splits"],
         )
 
@@ -382,7 +385,9 @@ class DataModule(LightningDataModule):
         return idx_train, idx_val, idx_test
 
     def _prepare_rMD17(self):
-        self.dataset = rMD17(root=self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"])
+        self.dataset = rMD17(
+            root=self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"]
+        )
 
         train_size = self.hparams["train_size"]
         val_size = self.hparams["val_size"]
@@ -391,8 +396,9 @@ class DataModule(LightningDataModule):
         if splits is not None:
             split_idxs = self.dataset.get_split(splits)
             assert len(split_idxs) == 2, "Expected two splits"
-            assert len(split_idxs[
-                           0]) == train_size + val_size, f"Expected train+val{train_size + val_size} size != {len(split_idxs[0])} size"
+            assert (
+                len(split_idxs[0]) == train_size + val_size
+            ), f"Expected train+val{train_size + val_size} size != {len(split_idxs[0])} size"
             # idx_train, idx_val = split_idxs[0][:train_size], split_idxs[0][train_size:]
             idx_train_local, idx_val_local, _ = make_splits(
                 len(split_idxs[0]),
@@ -400,14 +406,16 @@ class DataModule(LightningDataModule):
                 val_size,
                 None,
                 self.hparams["seed"],
-                join(self.hparams["output_dir"], "splits.npz"),
+                os.path.join(self.hparams["output_dir"], "splits.npz"),
                 splits=None,
             )
             train_val = torch.tensor(split_idxs[0])
             idx_train = train_val[idx_train_local]
             idx_val = train_val[idx_val_local]
             idx_test = split_idxs[1]
-            print(f"[ID: {splits}] train {len(idx_train)}, val {len(idx_val)}, test {len(idx_test)}")
+            print(
+                f"[ID: {splits}] train {len(idx_train)}, val {len(idx_val)}, test {len(idx_test)}"
+            )
         else:
             idx_train, idx_val, idx_test = make_splits(
                 len(self.dataset),
@@ -415,7 +423,7 @@ class DataModule(LightningDataModule):
                 val_size,
                 None,
                 self.hparams["seed"],
-                join(self.hparams["output_dir"], "splits.npz"),
+                os.path.join(self.hparams["output_dir"], "splits.npz"),
                 self.hparams["splits"],
             )
 

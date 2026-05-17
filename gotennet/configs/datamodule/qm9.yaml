@@ -3,7 +3,7 @@ _target_: gotennet.datamodules.datamodule.DataModule
 hparams:
   dataset: QM9
   dataset_arg:
-  dataset_root: ${paths.data_dir} # data_path is specified in config.yaml
+  dataset_root: ${paths.data_dir}/qm9 # data_path is specified in config.yaml
   derivative: false
   split_mode: null
   reload: 0
@@ -16,7 +16,7 @@ hparams:
   test_size: null
   num_workers: 12
   seed: 1
-  output_dir: ${paths.output_dir}
+  output_dir: ${paths.output_dir}/qm9
   ngpus: 1
   num_nodes: 1
   precision: 32

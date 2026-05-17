@@ -8,15 +8,15 @@ hparams:
   split_mode: null
   reload: 0
   batch_size: 8
-  inference_batch_size: 4
+  inference_batch_size: 32
   standardize: true
   splits: null
   train_size: 950
   val_size: 50
   test_size: null
-  num_workers: 4
+  num_workers: 12
   seed: 1
-  output_dir: ${paths.output_dir}
+  output_dir: ${paths.output_dir}/md22
   ngpus: 1
   num_nodes: 1
   precision: 32
