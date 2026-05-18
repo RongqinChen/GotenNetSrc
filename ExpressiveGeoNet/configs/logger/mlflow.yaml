@@ -1,0 +1,9 @@
+# https://mlflow.org
+
+mlflow:
+  _target_: pytorch_lightning.loggers.mlflow.MLFlowLogger
+  experiment_name: ${name}
+  tracking_uri: ${paths.output_dir}/mlflow/mlruns # run `mlflow ui` in this directory to open the UI
+  tags: null
+  prefix: ""
+  artifact_location: null
