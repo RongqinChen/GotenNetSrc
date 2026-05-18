@@ -6,7 +6,7 @@ from typing import List
 
 import requests
 
-from common.logging import get_logger
+from src.common.logging import get_logger
 
 log = get_logger(__name__)
 
@@ -160,7 +160,7 @@ def download_checkpoint(checkpoint_url: str) -> str:
         ValueError: If the checkpoint name format is invalid or task/parameters are not supported.
         ImportError: If required modules for validation cannot be imported.
     """
-    from model.tasks import TASK_DICT
+    from src.model.tasks import TASK_DICT
 
     urls_to_try: List[str] = []
     local_filename: str
@@ -196,7 +196,7 @@ def download_checkpoint(checkpoint_url: str) -> str:
             raise ValueError(f"Size {size} is not supported.")
         if task == "qm9":
             try:
-                from data.datasets.qm9 import qm9_target_dict
+                from src.data.datasets.qm9 import qm9_target_dict
 
                 label2idx = dict(
                     zip(

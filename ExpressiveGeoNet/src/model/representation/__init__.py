@@ -1,5 +1,5 @@
 """Representation modules for ExpressiveGeoNet."""
 
-from .encoder import GotenNet, GotenNetWrapper
+from src.model.representation.encoder import GotenNet, GotenNetWrapper
 
 __all__ = ["GotenNet", "GotenNetWrapper"]

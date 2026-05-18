@@ -1,8 +1,8 @@
 """Task implementations for supported molecular prediction datasets."""
 
-from .md import MDTask
-from .molecule3d import Molecule3DTask
-from .qm9 import QM9Task
+from src.model.tasks.md import MDTask
+from src.model.tasks.molecule3d import Molecule3DTask
+from src.model.tasks.qm9 import QM9Task
 
 TASK_DICT = {
     "QM9": QM9Task,

@@ -7,8 +7,8 @@ from torch import nn as nn
 from torch.nn.init import constant_, xavier_uniform_
 from torch_geometric.nn.inits import glorot_orthogonal
 
-from common.logging import get_logger
-from model.layers.activations import shifted_softplus
+from src.common.logging import get_logger
+from src.model.layers.activations import shifted_softplus
 
 zeros_initializer = partial(constant_, val=0.0)
 log = get_logger(__name__)
@@ -335,4 +335,3 @@ class MLP(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
-

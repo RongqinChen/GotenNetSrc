@@ -7,9 +7,9 @@ import torch.nn.functional as F
 import torchmetrics
 from torch.nn import L1Loss
 
-from data.datasets.molecule3d import Molecule3D
-from model.heads import Atomwise
-from model.tasks.base import Task
+from src.data.datasets.molecule3d import Molecule3D
+from src.model.heads import Atomwise
+from src.model.tasks.base import Task
 
 
 class Molecule3DTask(Task):

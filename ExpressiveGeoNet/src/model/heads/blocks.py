@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from model.layers import Dense
+from src.model.layers import Dense
 
 class GatedEquivariantBlock(nn.Module):
     """

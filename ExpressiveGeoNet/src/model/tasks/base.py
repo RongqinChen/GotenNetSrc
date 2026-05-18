@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from common.logging import get_logger
+from src.common.logging import get_logger
 
 log = get_logger(__name__)
 

@@ -1,8 +1,8 @@
 """Layer primitives grouped by activation, basis, graph, and dense helpers."""
 
-from .activations import ShiftedSoftplus, Swish, shifted_softplus, str2act
-from .basis import BesselBasis, ExpNormalSmearing, GaussianRBF, str2basis
-from .common import (
+from src.model.layers.activations import ShiftedSoftplus, Swish, shifted_softplus, str2act
+from src.model.layers.basis import BesselBasis, ExpNormalSmearing, GaussianRBF, str2basis
+from src.model.layers.common import (
     Dense,
     GetItem,
     MLP,
@@ -10,8 +10,8 @@ from .common import (
     SchnetMLP,
     get_weight_init_by_string,
 )
-from .cutoff import CosineCutoff, PolynomialCutoff, safe_norm
-from .graph import Distance, EdgeInit, NodeInit, TensorLayerNorm
+from src.model.layers.cutoff import CosineCutoff, PolynomialCutoff, safe_norm
+from src.model.layers.graph import Distance, EdgeInit, NodeInit, TensorLayerNorm
 
 __all__ = [
     "BesselBasis",

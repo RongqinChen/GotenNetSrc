@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import os
 import warnings
 from functools import wraps
 from importlib.util import find_spec
-from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities import rank_zero_only
 
-from common.logging import get_logger
+from src.common.logging import get_logger
 
 log = get_logger(__name__)
 
@@ -88,13 +86,6 @@ def print_config(
         branch.add(rich.syntax.Syntax(branch_content, "yaml"))
 
     rich.print(tree)
-
-    project_root = Path(os.environ.get("PROJECT_ROOT", Path.cwd()))
-    config_dir = project_root / "artifacts" / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    with (config_dir / "config_tree.log").open("w", encoding="utf-8") as file_handle:
-        rich.print(tree, file=file_handle)
-
 
 def get_metric_value(
     metric_dict: dict[str, Any],

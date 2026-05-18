@@ -8,11 +8,11 @@ import torch.nn as nn
 import torch.optim as opt
 from omegaconf import DictConfig
 
-from common.logging import get_logger
-from common.project import get_function_name
+from src.common.logging import get_logger
+from src.common.project import get_function_name
 
 # Local application/library specific imports
-from .tasks import TASK_DICT
+from src.model.tasks import TASK_DICT
 
 BaseModuleType = TypeVar("BaseModelType", bound="nn.Module")
 
@@ -161,7 +161,7 @@ class GotenModel(pl.LightningModule):
         cls,
         checkpoint_url: str,  # Input is always a string
     ):
-        from runtime.checkpoints import download_checkpoint
+        from src.runtime.checkpoints import download_checkpoint
 
         ckpt_path = download_checkpoint(checkpoint_url)
         return cls.load_from_checkpoint(ckpt_path)

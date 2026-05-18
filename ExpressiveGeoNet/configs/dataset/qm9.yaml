@@ -1,4 +1,4 @@
-_target_: data.module.DataModule
+_target_: src.data.module.DataModule
 
 hparams:
   dataset: QM9

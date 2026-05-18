@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .logging import get_logger
+from src.common.logging import get_logger
 
 log = get_logger(__name__)
 

@@ -4,8 +4,8 @@ import torch
 from torch import nn as nn
 from torch import Tensor
 
-from model.layers.activations import normalize_string
-from model.layers.cutoff import CosineCutoff
+from src.model.layers.activations import normalize_string
+from src.model.layers.cutoff import CosineCutoff
 
 
 def gaussian_rbf(inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor):

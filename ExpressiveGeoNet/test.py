@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import hydra
 from omegaconf import DictConfig
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from runtime.bootstrap import bootstrap_entrypoint
-from runtime.runner import test
-from runtime.ui import extras, get_metric_value
+from src.runtime.bootstrap import bootstrap_entrypoint
+from src.runtime.runner import test
+from src.runtime.ui import extras, get_metric_value
 
 CONFIG_DIR = bootstrap_entrypoint(allow_tf32=True)
 

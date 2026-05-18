@@ -6,8 +6,8 @@ import torch_scatter
 from torch import nn
 from torch.autograd import grad
 
-from common.logging import get_logger
-from model.layers import (
+from src.common.logging import get_logger
+from src.model.layers import (
     GetItem,
     ScaleShift,
     SchnetMLP,

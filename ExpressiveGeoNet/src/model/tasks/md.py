@@ -7,8 +7,8 @@ import torch.nn.functional as F
 import torchmetrics
 from torch.nn import MSELoss
 
-from model.heads import AtomwiseV3
-from model.tasks.base import Task
+from src.model.heads import AtomwiseV3
+from src.model.tasks.base import Task
 
 
 class MDTask(Task):

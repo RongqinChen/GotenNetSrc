@@ -1,5 +1,5 @@
 """Model system, representation, layers, heads, and task exports."""
 
-from .system import GotenModel
+from src.model.system import GotenModel
 
 __all__ = ["GotenModel"]

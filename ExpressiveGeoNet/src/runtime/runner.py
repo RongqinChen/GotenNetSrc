@@ -8,9 +8,9 @@ import hydra
 from omegaconf import DictConfig
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 
-from common.logging import get_logger, log_hyperparameters
-from model.system import GotenModel
-from runtime.factories import (
+from src.common.logging import get_logger, log_hyperparameters
+from src.model.system import GotenModel
+from src.runtime.factories import (
     build_callbacks,
     build_loggers,
     build_trainer_config,
@@ -20,7 +20,7 @@ from runtime.factories import (
     populate_run_metadata,
     seed_from_config,
 )
-from runtime.ui import task_wrapper
+from src.runtime.ui import task_wrapper
 
 log = get_logger(__name__)
 

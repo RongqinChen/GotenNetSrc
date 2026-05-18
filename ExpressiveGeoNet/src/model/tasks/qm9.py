@@ -7,13 +7,13 @@ import torch.nn.functional as F
 import torchmetrics
 from torch.nn import L1Loss
 
-from data.datasets.qm9 import QM9
-from model.heads import (
+from src.data.datasets.qm9 import QM9
+from src.model.heads import (
     Atomwise,
     Dipole,
     ElectronicSpatialExtentV2,
 )
-from model.tasks.base import Task
+from src.model.tasks.base import Task
 
 
 class QM9Task(Task):

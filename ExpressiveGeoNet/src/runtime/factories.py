@@ -11,7 +11,7 @@ from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, LightningDataModule, seed_everything
 from pytorch_lightning.loggers import Logger
 
-from common.logging import get_logger
+from src.common.logging import get_logger
 
 log = get_logger(__name__)
 

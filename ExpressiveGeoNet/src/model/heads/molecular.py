@@ -7,9 +7,9 @@ import torch_scatter
 from torch import nn
 from torch_geometric.utils import scatter
 
-from model.heads.atomwise import Atomwise
-from model.heads.blocks import GatedEquivariantBlock
-from model.layers import shifted_softplus
+from src.model.heads.atomwise import Atomwise
+from src.model.heads.blocks import GatedEquivariantBlock
+from src.model.layers import shifted_softplus
 
 class Dipole(nn.Module):
     """Output layer for dipole moment."""

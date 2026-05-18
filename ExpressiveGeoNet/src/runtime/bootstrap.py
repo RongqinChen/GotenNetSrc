@@ -8,7 +8,7 @@ from typing import Final
 import dotenv
 import torch
 
-from common.project import find_config_directory
+from src.common.project import find_config_directory
 
 _PATCH_FLAG: Final[str] = "_expressivegeonet_patched"
 

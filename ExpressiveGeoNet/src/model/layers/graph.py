@@ -6,8 +6,8 @@ from torch import nn as nn
 from torch_cluster import radius_graph
 from torch_geometric.nn import MessagePassing
 
-from model.layers.common import MLP
-from model.layers.cutoff import CosineCutoff
+from src.model.layers.common import MLP
+from src.model.layers.cutoff import CosineCutoff
 
 
 def get_split_sizes_from_lmax(lmax):

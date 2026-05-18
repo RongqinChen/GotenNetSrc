@@ -12,10 +12,10 @@ from torch_geometric.loader import DataLoader
 from torch_scatter import scatter
 from tqdm import tqdm
 
-from common.logging import get_logger
-from data.datasets import MD22, Molecule3D, QM9, rMD17
-from data.splits import MissingLabelException, make_splits
-from data.transforms import normalize_positions
+from src.common.logging import get_logger
+from src.data.datasets import MD22, Molecule3D, QM9, rMD17
+from src.data.splits import MissingLabelException, make_splits
+from src.data.transforms import normalize_positions
 
 log = get_logger(__name__)
 

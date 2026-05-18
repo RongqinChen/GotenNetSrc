@@ -16,8 +16,8 @@ from torch_geometric.typing import OptTensor
 from torch_geometric.utils import scatter, softmax
 
 # Local application/library specific imports
-from common.logging import get_logger
-from model.layers import (
+from src.common.logging import get_logger
+from src.model.layers import (
     MLP,
     CosineCutoff,
     Dense,
@@ -29,7 +29,7 @@ from model.layers import (
     str2act,
     str2basis,
 )
-from model.representation.checkpoint import load_representation_from_checkpoint
+from src.model.representation.checkpoint import load_representation_from_checkpoint
 
 log = get_logger(__name__)
 
