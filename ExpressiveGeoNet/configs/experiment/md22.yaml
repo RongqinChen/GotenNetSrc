@@ -11,7 +11,8 @@ datamodule:
   hparams:
     seed: 1
     standardize: true
-    inference_batch_size: 2
+    batch_size: 32
+    inference_batch_size: 32
 
 label: "at_at"
 model:
@@ -32,17 +33,17 @@ model:
         - 0.95
 
   representation:
-    n_interactions: 16
-    n_atom_basis: 64
+    n_interactions: 6
+    n_atom_basis: 128
     radial_basis: "expnorm"
-    n_rbf: 32
+    n_rbf: 64
     edge_updates: "linw_mlpa"
     lmax: 2
-    evec_dim: 64
-    emlp_dim: 64
+    evec_dim: 128
+    emlp_dim: 128
 
   output:
-    n_hidden: 64
+    n_hidden: 128
 
 
 trainer:

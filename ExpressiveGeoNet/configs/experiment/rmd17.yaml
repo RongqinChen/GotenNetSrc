@@ -1,8 +1,5 @@
 # @package _global_
 
-# to execute this experiment run:
-# python train.py experiment=example
-
 defaults:
   - override /dataset@datamodule: rmd17.yaml
   - override /model: gotennet.yaml
@@ -15,7 +12,8 @@ datamodule:
     seed: 1
     standardize: true
     splits: 0
-    inference_batch_size: 4
+    batch_size: 32
+    inference_batch_size: 32
 
 model:
   lr: 0.0002
@@ -35,18 +33,16 @@ model:
         - 0.95
 
   representation:
-    n_interactions: 16
-    n_atom_basis: 192
+    n_interactions: 8
+    n_atom_basis: 256
     radial_basis: "expnorm"
-    n_rbf: 32
+    n_rbf: 64
     edge_updates: "linw_mlpa"
     lmax: 2
-    evec_dim: 768
-    emlp_dim: 768
-
+    evec_dim: 256
+    emlp_dim: 256
   output:
     n_hidden: 256
-
 
 trainer:
   max_epochs: 3000
