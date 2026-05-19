@@ -1,8 +1,14 @@
 import torch
+from typing import Optional
+
 from torch_geometric.datasets import QM9 as QM9_geometric
 from torch_geometric.transforms import Compose
 
-qm9_target_dict = {
+# ---------------------------------------------------------------------------
+# QM9 target properties and their column indices in the raw dataset.
+# The dict is the single source of truth – all lookups derive from it.
+# ---------------------------------------------------------------------------
+qm9_target_dict: dict[int, str] = {
     0: "mu",
     1: "alpha",
     2: "homo",
@@ -17,42 +23,27 @@ qm9_target_dict = {
     11: "Cv",
 }
 
+# Reverse mapping: property name -> column index (built once, shared).
+_qm9_label_to_idx: dict[str, int] = {
+    label: idx for idx, label in qm9_target_dict.items()
+}
+
 
 class QM9(QM9_geometric):
     """
-    QM9 dataset wrapper for PyTorch Geometric QM9 dataset.
-    
-    This class extends the PyTorch Geometric QM9 dataset to provide additional
-    functionality for working with specific molecular properties.
+    QM9 dataset wrapper for PyTorch Geometric.
+
+    Extends the PyTorch Geometric ``QM9`` dataset to support:
+
+    * **Property filtering** – each instance stores only the target property
+      specified via ``dataset_arg`` (shape ``(1,)``).
+    * **Summary statistics** – :meth:`mean`, :meth:`std`, and :meth:`min`
+      iterate over the full dataset on demand.
+    * **Atomic references** – :meth:`get_atomref` returns per-element reference
+      values for the active property.
     """
 
-    mu = "mu"
-    alpha = "alpha"
-    homo = "homo"
-    lumo = "lumo"
-    gap = "gap"
-    r2 = "r2"
-    zpve = "zpve"
-    U0 = "U0"
-    U = "U"
-    H = "H"
-    G = "G"
-    Cv = "Cv"
-
-    available_properties = [
-        mu,
-        alpha,
-        homo,
-        lumo,
-        gap,
-        r2,
-        zpve,
-        U0,
-        U,
-        H,
-        G,
-        Cv,
-    ]
+    available_properties: list[str] = list(qm9_target_dict.values())
 
     def __init__(
         self,
@@ -60,161 +51,127 @@ class QM9(QM9_geometric):
         transform=None,
         pre_transform=None,
         pre_filter=None,
-        dataset_arg=None,
+        dataset_arg: Optional[str] = None,
     ):
         """
-        Initialize the QM9 dataset.
-        
         Args:
-            root (str): Root directory where the dataset should be saved.
-            transform: Transform to be applied to each data object. If None,
-                       defaults to _filter_label.
-            pre_transform: Transform to be applied to each data object before saving.
-            pre_filter: Function that takes in a data object and returns a boolean,
-                       indicating whether the item should be included.
-            dataset_arg (str): The property to train on. Must be one of the available
-                              properties defined in qm9_target_dict.
-        
-        Raises:
-            AssertionError: If dataset_arg is None.
+            root: Root directory where the dataset is stored / will be saved.
+            transform: Per-sample transform. If ``None``, defaults to
+                        :meth:`_filter_label` (selecting only the target
+                        property column).
+            pre_transform: Transform applied before saving to disk.
+            pre_filter: Filter function that receives a data object and returns
+                        ``True`` if it should be kept.
+            dataset_arg: Target property name (e.g. ``"U0"``, ``"gap"``).
+                         **Required** – must be one of
+                         :attr:`available_properties`.
         """
         assert dataset_arg is not None, (
-            "Please pass the desired property to "
-            'train on via "dataset_arg". Available '
-            f'properties are {", ".join(qm9_target_dict.values())}.'
+            f"Pass the desired property via 'dataset_arg'. "
+            f"Available properties: {', '.join(qm9_target_dict.values())}."
         )
 
         self.label = dataset_arg
-        label2idx = dict(zip(qm9_target_dict.values(), qm9_target_dict.keys(), strict=False))
-        self.label_idx = label2idx[self.label]
+        self.label_idx = _qm9_label_to_idx[self.label]
 
+        # Build the transform pipeline: label-filtering is always the
+        # last transform applied so that ``batch.y`` always has shape ``(N, 1)``.
+        filter_tfm = self._filter_label
         if transform is None:
-            transform = self._filter_label
+            transform = filter_tfm
         else:
-            transform = Compose([transform, self._filter_label])
+            transform = Compose([transform, filter_tfm])
 
-        super(QM9, self).__init__(
+        super().__init__(
             root,
             transform=transform,
             pre_transform=pre_transform,
             pre_filter=pre_filter,
         )
 
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
 
     @staticmethod
     def label_to_idx(label: str) -> int:
+        """Return the column index in the raw QM9 data for *label*."""
+        return _qm9_label_to_idx[label]
+
+    def get_atomref(self, max_z: int = 100) -> Optional[torch.Tensor]:
         """
-        Convert a property label to its corresponding index.
-        
+        Atomic reference values for the target property.
+
         Args:
-            label (str): The property label to convert.
-            
+            max_z: Maximum atomic number to pad / truncate to.
+
         Returns:
-            int: The index corresponding to the property label.
-        """
-        label2idx = dict(zip(qm9_target_dict.values(), qm9_target_dict.keys(), strict=False))
-        return label2idx[label]
-
-    def mean(self, divide_by_atoms: bool = True) -> float:
-        """
-        Calculate the mean of the target property across the dataset.
-        
-        Args:
-            divide_by_atoms (bool): Whether to normalize the property by the number
-                                   of atoms in each molecule.
-            
-        Returns:
-            float: The mean value of the target property.
-        """
-        if not divide_by_atoms:
-            get_labels = lambda i: self.get(i).y
-        else:
-            get_labels = lambda i: self.get(i).y/self.get(i).pos.shape[0]
-
-        y = torch.cat([get_labels(i) for i in range(len(self))], dim=0)
-        assert len(y.shape) == 2
-        if y.shape[1] != 1:
-            y = y[:, self.label_idx]
-        else:
-            y = y[:, 0]
-        return y.mean(axis=0)
-    def min(self, divide_by_atoms: bool = True) -> float:
-        """
-        Calculate the minimum of the target property across the dataset.
-        
-        Args:
-            divide_by_atoms (bool): Whether to normalize the property by the number
-                                   of atoms in each molecule.
-            
-        Returns:
-            float: The minimum value of the target property.
-        """
-        if not divide_by_atoms:
-            get_labels = lambda i: self.get(i).y
-        else:
-            get_labels = lambda i: self.get(i).y/self.get(i).pos.shape[0]
-
-        y = torch.cat([get_labels(i) for i in range(len(self))], dim=0)
-        assert len(y.shape) == 2
-        if y.shape[1] != 1:
-            y = y[:, self.label_idx]
-        else:
-            y = y[:, 0]
-        return y.min(axis=0)
-
-    def std(self, divide_by_atoms: bool = True) -> float:
-        """
-        Calculate the standard deviation of the target property across the dataset.
-        
-        Args:
-            divide_by_atoms (bool): Whether to normalize the property by the number
-                                   of atoms in each molecule.
-            
-        Returns:
-            float: The standard deviation of the target property.
-        """
-        if not divide_by_atoms:
-            get_labels = lambda i: self.get(i).y
-        else:
-            get_labels = lambda i: self.get(i).y/self.get(i).pos.shape[0]
-
-        y = torch.cat([get_labels(i) for i in range(len(self))], dim=0)
-        assert len(y.shape) == 2
-        if y.shape[1] != 1:
-            y = y[:, self.label_idx]
-        else:
-            y = y[:, 0]
-        return y.std(axis=0)
-
-    def get_atomref(self, max_z: int = 100) -> torch.Tensor:
-        """
-        Get atomic reference values for the target property.
-        
-        Args:
-            max_z (int): Maximum atomic number to consider.
-            
-        Returns:
-            torch.Tensor: Tensor of atomic reference values, or None if not available.
+            Tensor of shape ``(max_z, 1)``, or ``None`` if no reference
+            data exists for this property.
         """
         atomref = self.atomref(self.label_idx)
         if atomref is None:
             return None
-        if atomref.size(0) != max_z:
-            tmp = torch.zeros(max_z).unsqueeze(1)
-            idx = min(max_z, atomref.size(0))
-            tmp[:idx] = atomref[:idx]
-            return tmp
-        return atomref
 
-    def _filter_label(self, batch) -> torch.Tensor:
+        if atomref.size(0) == max_z:
+            return atomref
+
+        padded = torch.zeros(max_z, 1)
+        n = min(max_z, atomref.size(0))
+        padded[:n] = atomref[:n]
+        return padded
+
+    # ------------------------------------------------------------------
+    # Summary statistics (iterate over *all* samples – use sparingly)
+    # ------------------------------------------------------------------
+
+    def mean(self, divide_by_atoms: bool = True) -> float:
+        """Mean of the target property over the whole dataset."""
+        return self._agg("mean", divide_by_atoms)
+
+    def std(self, divide_by_atoms: bool = True) -> float:
+        """Standard deviation of the target property over the whole dataset."""
+        return self._agg("std", divide_by_atoms)
+
+    def min(self, divide_by_atoms: bool = True) -> float:
+        """Minimum of the target property over the whole dataset."""
+        return self._agg("min", divide_by_atoms)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _agg(self, reduction: str, divide_by_atoms: bool) -> float:
         """
-        Filter the batch to only include the target property.
-        
-        Args:
-            batch: A batch of data from the dataset.
-            
-        Returns:
-            torch.Tensor: The filtered batch with only the target property.
+        Compute *reduction* over the target property of every sample.
+
+        Parameters
+        ----------
+        reduction:
+            One of ``"mean"``, ``"std"``, ``"min"`` – the name of the
+            :class:`torch.Tensor` reduction method to apply.
+        divide_by_atoms:
+            If ``True``, each label is normalised by the number of atoms
+            in its molecule **before** the reduction.
+        """
+        values = []
+        for i in range(len(self)):
+            sample = self.get(i)
+            # After ``_filter_label``, ``sample.y`` has shape ``(1, 1)``.
+            y = sample.y
+            if divide_by_atoms:
+                y = y / sample.pos.shape[0]
+            values.append(y)
+
+        all_y = torch.cat(values, dim=0)  # (N, 1)
+        return getattr(all_y, reduction)(dim=0).item()
+
+    def _filter_label(self, batch):
+        """
+        Transform that keeps **only** the target property column.
+
+        After this transform ``batch.y`` has shape ``(N, 1)`` where ``N`` is
+        the batch size.
         """
         batch.y = batch.y[:, self.label_idx].unsqueeze(1)
         return batch

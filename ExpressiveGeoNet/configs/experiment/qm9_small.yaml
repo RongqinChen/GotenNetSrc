@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - qm9.yaml
+
+model:
+  representation:
+    n_interactions: 4
+
+project: "ExpressiveGeoNet_qm9_small"

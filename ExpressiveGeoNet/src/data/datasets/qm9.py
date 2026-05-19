@@ -1,12 +1,15 @@
-import torch
-from typing import Optional
+"""QM9 dataset wrapper — 133k small organic molecules with 12 DFT properties."""
 
-from torch_geometric.datasets import QM9 as QM9_geometric
+from __future__ import annotations
+
+from functools import lru_cache
+
+import torch
+from torch_geometric.datasets import QM9 as QM9_pyg
 from torch_geometric.transforms import Compose
 
 # ---------------------------------------------------------------------------
-# QM9 target properties and their column indices in the raw dataset.
-# The dict is the single source of truth – all lookups derive from it.
+# QM9 target properties: column index → property name.
 # ---------------------------------------------------------------------------
 qm9_target_dict: dict[int, str] = {
     0: "mu",
@@ -23,96 +26,66 @@ qm9_target_dict: dict[int, str] = {
     11: "Cv",
 }
 
-# Reverse mapping: property name -> column index (built once, shared).
+# Reverse mapping: property name → column index.
 _qm9_label_to_idx: dict[str, int] = {
     label: idx for idx, label in qm9_target_dict.items()
 }
 
 
-class QM9(QM9_geometric):
-    """
-    QM9 dataset wrapper for PyTorch Geometric.
+class QM9(QM9_pyg):
+    """QM9 dataset — one target property per sample.
 
-    Extends the PyTorch Geometric ``QM9`` dataset to support:
+    Extends the PyTorch Geometric ``QM9`` dataset with:
 
-    * **Property filtering** – each instance stores only the target property
-      specified via ``dataset_arg`` (shape ``(1,)``).
-    * **Summary statistics** – :meth:`mean`, :meth:`std`, and :meth:`min`
-      iterate over the full dataset on demand.
-    * **Atomic references** – :meth:`get_atomref` returns per-element reference
-      values for the active property.
+    * **Property filtering** — ``label`` selects a single target column;
+      ``batch.y`` will have shape ``(N, 1)``.
+    * **Summary statistics** — :meth:`mean`, :meth:`std`, :meth:`min` iterate
+      the full dataset once and cache results.
+    * **Atomic references** — :meth:`get_atomref` returns per-element reference
+      energies for the active property.
     """
 
     available_properties: list[str] = list(qm9_target_dict.values())
 
-    def __init__(
-        self,
-        root: str,
-        transform=None,
-        pre_transform=None,
-        pre_filter=None,
-        dataset_arg: Optional[str] = None,
-    ):
-        """
-        Args:
-            root: Root directory where the dataset is stored / will be saved.
-            transform: Per-sample transform. If ``None``, defaults to
-                        :meth:`_filter_label` (selecting only the target
-                        property column).
-            pre_transform: Transform applied before saving to disk.
-            pre_filter: Filter function that receives a data object and returns
-                        ``True`` if it should be kept.
-            dataset_arg: Target property name (e.g. ``"U0"``, ``"gap"``).
-                         **Required** – must be one of
-                         :attr:`available_properties`.
-        """
-        assert dataset_arg is not None, (
-            f"Pass the desired property via 'dataset_arg'. "
-            f"Available properties: {', '.join(qm9_target_dict.values())}."
-        )
-
-        self.label = dataset_arg
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, label=None):
+        self.label = self._validate_label(label)
         self.label_idx = _qm9_label_to_idx[self.label]
 
-        # Build the transform pipeline: label-filtering is always the
-        # last transform applied so that ``batch.y`` always has shape ``(N, 1)``.
+        # The label filter transform is always applied last so that
+        # ``batch.y`` consistently has shape ``(N, 1)``.
         filter_tfm = self._filter_label
         if transform is None:
             transform = filter_tfm
         else:
             transform = Compose([transform, filter_tfm])
 
-        super().__init__(
-            root,
-            transform=transform,
-            pre_transform=pre_transform,
-            pre_filter=pre_filter,
-        )
+        super().__init__(root, transform=transform, pre_transform=pre_transform, pre_filter=pre_filter)
 
-    # ------------------------------------------------------------------
-    # Public helpers
-    # ------------------------------------------------------------------
+    # ── Public helpers ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_label(label: str | None) -> str:
+        if label is None:
+            raise ValueError(
+                f"Pass a property via 'label'. Available: {', '.join(qm9_target_dict.values())}."
+            )
+        if label not in _qm9_label_to_idx:
+            raise ValueError(f"Unknown QM9 property '{label}'.")
+        return label
 
     @staticmethod
     def label_to_idx(label: str) -> int:
         """Return the column index in the raw QM9 data for *label*."""
-        return _qm9_label_to_idx[label]
+        try:
+            return _qm9_label_to_idx[label]
+        except KeyError as exc:
+            raise ValueError(f"Unknown QM9 property '{label}'.") from exc
 
-    def get_atomref(self, max_z: int = 100) -> Optional[torch.Tensor]:
-        """
-        Atomic reference values for the target property.
-
-        Args:
-            max_z: Maximum atomic number to pad / truncate to.
-
-        Returns:
-            Tensor of shape ``(max_z, 1)``, or ``None`` if no reference
-            data exists for this property.
-        """
+    def get_atomref(self, max_z: int = 100) -> torch.Tensor | None:
+        """Atomic reference energies, padded/truncated to *max_z* elements."""
         atomref = self.atomref(self.label_idx)
         if atomref is None:
             return None
-
         if atomref.size(0) == max_z:
             return atomref
 
@@ -121,57 +94,30 @@ class QM9(QM9_geometric):
         padded[:n] = atomref[:n]
         return padded
 
-    # ------------------------------------------------------------------
-    # Summary statistics (iterate over *all* samples – use sparingly)
-    # ------------------------------------------------------------------
+    # ── Summary statistics ──────────────────────────────────────────────
 
     def mean(self, divide_by_atoms: bool = True) -> float:
-        """Mean of the target property over the whole dataset."""
-        return self._agg("mean", divide_by_atoms)
+        return self._get_values(divide_by_atoms).mean(dim=0).item()
 
     def std(self, divide_by_atoms: bool = True) -> float:
-        """Standard deviation of the target property over the whole dataset."""
-        return self._agg("std", divide_by_atoms)
+        return self._get_values(divide_by_atoms).std(dim=0).item()
 
     def min(self, divide_by_atoms: bool = True) -> float:
-        """Minimum of the target property over the whole dataset."""
-        return self._agg("min", divide_by_atoms)
+        return self._get_values(divide_by_atoms).min(dim=0).values.item()
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _agg(self, reduction: str, divide_by_atoms: bool) -> float:
-        """
-        Compute *reduction* over the target property of every sample.
-
-        Parameters
-        ----------
-        reduction:
-            One of ``"mean"``, ``"std"``, ``"min"`` – the name of the
-            :class:`torch.Tensor` reduction method to apply.
-        divide_by_atoms:
-            If ``True``, each label is normalised by the number of atoms
-            in its molecule **before** the reduction.
-        """
+    @lru_cache(maxsize=2)
+    def _get_values(self, divide_by_atoms: bool) -> torch.Tensor:
+        """Collect target values for all samples in one pass, caching the result."""
         values = []
         for i in range(len(self)):
             sample = self.get(i)
-            # After ``_filter_label``, ``sample.y`` has shape ``(1, 1)``.
             y = sample.y
             if divide_by_atoms:
                 y = y / sample.pos.shape[0]
             values.append(y)
-
-        all_y = torch.cat(values, dim=0)  # (N, 1)
-        return getattr(all_y, reduction)(dim=0).item()
+        return torch.cat(values, dim=0)
 
     def _filter_label(self, batch):
-        """
-        Transform that keeps **only** the target property column.
-
-        After this transform ``batch.y`` has shape ``(N, 1)`` where ``N`` is
-        the batch size.
-        """
+        """Keep only the target property column; ``batch.y`` → shape ``(N, 1)``."""
         batch.y = batch.y[:, self.label_idx].unsqueeze(1)
         return batch

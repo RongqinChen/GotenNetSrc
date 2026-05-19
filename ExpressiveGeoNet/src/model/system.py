@@ -1,7 +1,7 @@
-# Standard library imports
-from typing import Callable, Dict, Optional, TypeVar
+"""GotenModel — LightningModule combining representation, task head, and optimizers."""
 
-# Related third-party imports
+from typing import Any, Optional
+
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -10,35 +10,56 @@ from omegaconf import DictConfig
 
 from src.common.logging import get_logger
 from src.common.project import get_function_name
-
-# Local application/library specific imports
 from src.model.tasks import TASK_DICT
-
-BaseModuleType = TypeVar("BaseModelType", bound="nn.Module")
 
 log = get_logger(__name__)
 
+# ───────────────────────────────────────────────────────────────────────
+# Hydra helper
+# ───────────────────────────────────────────────────────────────────────
 
-def lazy_instantiate(d):
-    if isinstance(d, dict) or isinstance(d, DictConfig):
-        for k, v in d.items():
-            if k == "__target__":
-                log.info(f"Lazy instantiation of {v} with hydra.utils.instantiate")
-                d["_target_"] = d.pop("__target__")
-            elif isinstance(v, dict) or isinstance(v, DictConfig):
-                lazy_instantiate(v)
-    return d
+
+def _hydra_instantiate(config):
+    """Recursively convert ``__target__`` → ``_target_`` and instantiate via Hydra."""
+    if isinstance(config, (dict, DictConfig)):
+        for key, value in config.items():
+            if key == "__target__":
+                log.info(f"Lazy instantiation of {value} with hydra.utils.instantiate")
+                config["_target_"] = config.pop("__target__")
+            elif isinstance(value, (dict, DictConfig)):
+                _hydra_instantiate(value)
+    return config
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Main model
+# ───────────────────────────────────────────────────────────────────────
+
+VALID_PHASES = ("train", "validation", "test")
+
+
+def _phase_metric_map(instance, phase: str):
+    """Return ``(meta, metric_modules)`` tuple for the given phase."""
+    registry = {
+        "train": (instance.train_meta, instance.train_metrics),
+        "validation": (instance.val_meta, instance.val_metrics),
+        "test": (instance.test_meta, instance.test_metrics),
+    }
+    if phase not in registry:
+        raise NotImplementedError(f"Unknown phase {phase!r}. Expected one of {VALID_PHASES}")
+    return registry[phase]
 
 
 class GotenModel(pl.LightningModule):
-    """
-    Atomistic model for molecular property prediction.
+    """Atomistic model for molecular property prediction.
 
-    This model combines a representation module with task-specific output modules
-    to predict molecular properties.
+    Combines a representation encoder with task-specific output modules to
+    predict energies, forces, dipole moments, or other quantum-chemical properties.
     """
 
-    def __init__(
+    # ── Initialisation ────────────────────────────────────────────────
+
+    def __init__(  # noqa: PLR0913, PLR0915
         self,
         label: int,
         representation: nn.Module,
@@ -50,272 +71,213 @@ class GotenModel(pl.LightningModule):
         lr_monitor: str = "validation/ema_val_loss",
         weight_decay: float = 0.01,
         cutoff: float = 5.0,
-        dataset_meta: Optional[Dict[str, Dict[int, torch.Tensor]]] = None,
-        output: Optional[Dict] = None,
-        scheduler: Optional[Callable] = None,
+        dataset_meta: Optional[dict] = None,
+        output: Optional[dict] = None,
+        scheduler: Optional[dict] = None,  # passed as kwargs to CosineAnnealingLR
         save_predictions: Optional[bool] = None,
-        task_config: Optional[Dict] = None,
+        task_config: Optional[dict] = None,
         lr_warmup_steps: int = 0,
         use_ema: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
-        """
-        Initialize the atomistic model.
-
-        Args:
-            label: Target property index to predict.
-            representation: Neural network module for atom/molecule representation.
-            task: Task name, must be in TASK_DICT. Default is "QM9".
-            lr: Learning rate. Default is 5e-4.
-            lr_decay: Learning rate decay factor. Default is 0.5.
-            lr_patience: Patience for learning rate scheduler. Default is 100.
-            lr_minlr: Minimum learning rate. Default is 1e-6.
-            lr_monitor: Metric to monitor for LR scheduling. Default is "validation/ema_val_loss".
-            weight_decay: Weight decay for optimizer. Default is 0.01.
-            cutoff: Cutoff distance for interactions. Default is 5.0.
-            dataset_meta: Dataset metadata. Default is None.
-            output: Output module configuration. Default is None.
-            scheduler: Learning rate scheduler. Default is None.
-            save_predictions: Whether to save predictions. Default is None.
-            task_config: Task-specific configuration. Default is None.
-            lr_warmup_steps: Number of warmup steps for learning rate. Default is 0.
-            use_ema: Whether to use exponential moving average. Default is False.
-            **kwargs: Additional keyword arguments.
-        """
         super().__init__()
-        self.use_ema = use_ema
-        self.lr_warmup_steps = lr_warmup_steps
-        self.lr_minlr = lr_minlr
 
-        self.save_predictions = save_predictions
-        if output is None:
-            output = {}
+        # ── Store hyper-parameters for checkpointing ──────────────────
+        self.save_hyperparameters()
 
-        self.task = task
-        self.label = label
-
-        self.train_meta = []
-        self.train_metrics = []
-
-        self.cutoff = cutoff
+        # ── Training hyper-parameters ─────────────────────────────────
         self.lr = lr
         self.lr_decay = lr_decay
         self.lr_patience = lr_patience
+        self.lr_minlr = lr_minlr
         self.lr_monitor = lr_monitor
         self.weight_decay = weight_decay
+        self.lr_warmup_steps = lr_warmup_steps
+
+        # ── General configuration ─────────────────────────────────────
+        self.task = task
+        self.label = label
+        self.cutoff = cutoff
+        self.use_ema = use_ema
+        self.save_predictions = save_predictions
+        self.scheduler = scheduler  # dict forwarded to CosineAnnealingLR
+
+        # Store metadata (pop dataset object if present — used downstream)
         self.dataset_meta = dataset_meta
-        _dataset_obj = (
+        if dataset_meta is not None and "dataset" in dataset_meta:
             dataset_meta.pop("dataset")
-            if dataset_meta and "dataset" in dataset_meta
-            else None
+
+        # ── Representation encoder ────────────────────────────────────
+        self.representation = self._maybe_hydra_instantiate(representation)
+
+        # ── Task handler ──────────────────────────────────────────────
+        # The task handler provides losses, metrics, output heads, and optionally an evaluator.
+        if self.task in TASK_DICT:
+            self.task_handler = TASK_DICT[self.task](
+                representation=self.representation,
+                label_key=label,
+                dataset_meta=dataset_meta,
+                task_config=task_config,
+            )
+        else:
+            self.task_handler = None
+
+        self.evaluator = self.task_handler.get_evaluator() if self.task_handler else None
+
+        # ── Metrics ───────────────────────────────────────────────────
+        # Separate metric modules for train/validation/test (train is empty by default).
+        self.train_meta: list = []
+        self.train_metrics = nn.ModuleList()
+
+        self.val_meta = self.get_metrics()
+        self.val_metrics = nn.ModuleList([meta["metric"]() for meta in self.val_meta])
+
+        self.test_meta = self.get_metrics()
+        self.test_metrics = nn.ModuleList([meta["metric"]() for meta in self.test_meta])
+
+        # ── Output heads ──────────────────────────────────────────────
+        self.output_modules = self.get_output(output or {})
+
+        # ── Loss functions ────────────────────────────────────────────
+        self.loss_meta = self._prepare_loss_meta(self.get_losses())
+        self.loss_modules = nn.ModuleList([loss["metric"]() for loss in self.loss_meta])
+
+        # ── EMA tracking ──────────────────────────────────────────────
+        # Initialise EMA state for each loss across all phases.
+        self.ema: dict[str, Optional[torch.Tensor]] = {}
+        for loss_cfg in self.loss_meta:
+            for phase in VALID_PHASES:
+                self.ema[f"{phase}_{loss_cfg['target']}"] = None
+
+        # ── Derivative requirements ───────────────────────────────────
+        # Flag: does any output head require force derivatives?
+        self.requires_force_derivatives = any(
+            output_module.derivative for output_module in self.output_modules
         )
 
-        self.scheduler = scheduler
+    # ── Class methods ─────────────────────────────────────────────────
 
-        self.save_hyperparameters()
+    @classmethod
+    def from_pretrained(cls, checkpoint_url: str) -> "GotenModel":
+        """Load a pretrained model from a remote checkpoint URL."""
+        from src.runtime.checkpoints import download_checkpoint
 
+        checkpoint_path = download_checkpoint(checkpoint_url)
+        return cls.load_from_checkpoint(checkpoint_path)
+
+    # ── Internal helpers ──────────────────────────────────────────────
+
+    @staticmethod
+    def _maybe_hydra_instantiate(representation: nn.Module) -> nn.Module:
+        """If *representation* is a Hydra ``DictConfig``, instantiate it."""
         if isinstance(representation, DictConfig) and (
             "__target__" in representation or "_target_" in representation
         ):
             import hydra
 
-            lazy_instantiate(representation)
-            representation = hydra.utils.instantiate(representation)
+            _hydra_instantiate(representation)
+            return hydra.utils.instantiate(representation)
+        return representation
 
-        self.representation = representation
+    @staticmethod
+    def _prepare_loss_meta(loss_configs: list) -> list:
+        """Fill default ``ema_stages`` for any loss that defines an ``ema_rate``."""
+        for cfg in loss_configs:
+            if "ema_rate" in cfg and "ema_stages" not in cfg:
+                cfg["ema_stages"] = ["train", "validation"]
+        return loss_configs
 
-        if self.task in TASK_DICT:
-            self.task_handler = TASK_DICT[self.task](
-                representation, label, dataset_meta, task_config=task_config
-            )
-            self.evaluator = self.task_handler.get_evaluator()
-        else:
-            self.task_handler = None
-            self.evaluator = None
-
-        self.val_meta = self.get_metrics()
-        self.val_metrics = nn.ModuleList([v["metric"]() for v in self.val_meta])
-        self.test_meta = self.get_metrics()
-        self.test_metrics = nn.ModuleList([v["metric"]() for v in self.test_meta])
-
-        self.output_modules = self.get_output(output)
-
-        self.loss_meta = self.get_losses()
-        for loss in self.loss_meta:
-            if "ema_rate" in loss:
-                if "ema_stages" not in loss:
-                    loss["ema_stages"] = ["train", "validation"]
-        self.loss_metrics = self.get_losses()
-        self.loss_modules = nn.ModuleList([l["metric"]() for l in self.get_losses()])
-
-        self.ema = {}
-        for loss in self.get_losses():
-            for stage in ["train", "validation", "test"]:
-                self.ema[f"{stage}_{loss['target']}"] = None
-
-        # For gradients
-        self.requires_dr = any([om.derivative for om in self.output_modules])
-
-    @classmethod
-    def from_pretrained(
-        cls,
-        checkpoint_url: str,  # Input is always a string
-    ):
-        from src.runtime.checkpoints import download_checkpoint
-
-        ckpt_path = download_checkpoint(checkpoint_url)
-        return cls.load_from_checkpoint(ckpt_path)
-
-    def configure_model(self) -> None:
-        """
-        Configure the model. This method is called by PyTorch Lightning.
-        """
-        pass
-
-    def get_losses(self) -> list:
-        """
-        Get loss functions for the model.
-
-        Returns:
-            list: List of loss function configurations.
-
-        Raises:
-            NotImplementedError: If task handler is not available.
-        """
-        if self.task_handler:
-            return self.task_handler.get_losses()
-        else:
-            raise NotImplementedError()
-
-    def get_metrics(self) -> list:
-        """
-        Get metrics for model evaluation.
-
-        Returns:
-            list: List of metric configurations.
-
-        Raises:
-            NotImplementedError: If task is not implemented.
-        """
-        if self.task_handler:
-            return self.task_handler.get_metrics()
-        else:
-            raise NotImplementedError(f"Task not implemented {self.task}")
-
-    def get_phase_metric(self, phase: str = "train") -> tuple:
-        """
-        Get metrics for a specific training phase.
-
-        Args:
-            phase: Training phase ('train', 'validation', or 'test'). Default is 'train'.
-
-        Returns:
-            tuple: Tuple of (metric_meta, metric_modules).
-
-        Raises:
-            NotImplementedError: If phase is not recognized.
-        """
-        if phase == "train":
-            return self.train_meta, self.train_metrics
-        elif phase == "validation":
-            return self.val_meta, self.val_metrics
-        elif phase == "test":
-            return self.test_meta, self.test_metrics
-
-        raise NotImplementedError()
-
-    def get_output(self, output_config: Optional[Dict] = None) -> list:
-        """
-        Get output modules based on configuration.
-
-        Args:
-            output_config: Configuration for output modules. Default is None.
-
-        Returns:
-            list: List of output modules.
-
-        Raises:
-            NotImplementedError: If task is not implemented.
-        """
-        if self.task_handler:
-            return self.task_handler.get_output(output_config)
-        else:
-            raise NotImplementedError("Task not implemented")
-
-    def _get_num_graphs(self, batch) -> int:
-        """
-        Get the number of graphs in a batch.
-
-        Args:
-            batch: Batch of data.
-
-        Returns:
-            int: Number of graphs in the batch.
-        """
-        if type(batch) in [list, tuple]:
+    @staticmethod
+    def _get_num_graphs(batch) -> int:
+        """Extract the number of graphs from a PyG batch (or tuple thereof)."""
+        if isinstance(batch, (list, tuple)):
             batch = batch[0]
-
         return batch.num_graphs
 
-    def calculate_output(self, batch) -> Dict:
-        """
-        Calculate model outputs for a batch.
+    # ── Task delegation ───────────────────────────────────────────────
 
-        Args:
-            batch: Batch of data.
+    def get_losses(self) -> list:
+        """Return loss configurations from the task handler."""
+        if self.task_handler is not None:
+            return self.task_handler.get_losses()
+        raise NotImplementedError("No task handler configured — cannot retrieve losses.")
 
-        Returns:
-            Dict: Dictionary of model outputs.
-        """
+    def get_metrics(self) -> list:
+        """Return metric configurations from the task handler."""
+        if self.task_handler is not None:
+            return self.task_handler.get_metrics()
+        raise NotImplementedError(f"Task not implemented: {self.task}")
+
+    def get_output(self, output_config: Optional[dict] = None) -> list:
+        """Return output head modules from the task handler."""
+        if self.task_handler is not None:
+            return self.task_handler.get_output(output_config)
+        raise NotImplementedError(f"Task not implemented: {self.task}")
+
+    # ── Forward passes ─────────────────────────────────────────────────
+
+    def _encode(self, batch) -> Any:
+        """Run the representation encoder on *batch* and attach results."""
+        batch.representation, batch.vector_representation = self.representation(batch)
+        return batch
+
+    def _enable_grads_on_positions(self, batch) -> None:
+        """Enable gradient tracking on atomic positions if force derivatives are needed."""
+        if self.requires_force_derivatives:
+            batch.pos.requires_grad_()
+
+    def _apply_output_heads(self, batch) -> dict:
+        """Compute all output head predictions for *batch*."""
         result = {}
-        for output_model in self.output_modules:
-            result.update(output_model(batch))
+        for output_module in self.output_modules:
+            result.update(output_module(batch))
         return result
 
-    def training_step(self, batch, batch_idx) -> torch.Tensor:
+    def _forward_pipeline(self, batch) -> dict:
+        """Run the full forward pass: enable grads → encode → output heads.
+
+        Callers are responsible for managing ``torch.set_grad_enabled`` around this call.
         """
-        Perform a training step.
+        self._enable_grads_on_positions(batch)
+        self._encode(batch)
+        return self._apply_output_heads(batch)
 
-        Args:
-            batch: Batch of data.
-            batch_idx: Index of the batch.
-
-        Returns:
-            torch.Tensor: Loss value.
-        """
-        self._enable_grads(batch)
-
-        batch.representation, batch.vector_representation = self.representation(batch)
-
-        result = self.calculate_output(batch)
-        loss = self.calculate_loss(batch, result, name="train")
-        return loss
-
-    def validation_step(self, batch, batch_idx, dataloader_idx: int = 0) -> Dict:
-        """
-        Perform a validation step.
-
-        Args:
-            batch: Batch of data.
-            batch_idx: Index of the batch.
-            dataloader_idx: Index of the dataloader. Default is 0.
-
-        Returns:
-            Dict: Dictionary of validation losses and outputs.
-        """
+    def forward(self, batch) -> dict:
+        """Full forward pass with gradient tracking temporarily enabled."""
         torch.set_grad_enabled(True)
-        self._enable_grads(batch)
-
-        batch.representation, batch.vector_representation = self.representation(batch)
-
-        result = self.calculate_output(batch)
-
+        result = self._forward_pipeline(batch)
         torch.set_grad_enabled(False)
-        val_loss = self.calculate_loss(batch, result, "validation").detach().item()
+        return result
+
+    def encode(self, batch) -> Any:
+        """Encode *batch* only (no output heads)."""
+        torch.set_grad_enabled(True)
+        self._enable_grads_on_positions(batch)
+        return self._encode(batch)
+
+    # ── Training / validation / test steps ─────────────────────────────
+
+    def training_step(self, batch, batch_idx: int) -> torch.Tensor:  # type: ignore[override]
+        """Single training step: forward pass → loss → return scalar loss."""
+        result = self._forward_pipeline(batch)
+        return self.calculate_loss(batch, result, name="train")
+
+    def validation_step(  # type: ignore[override]
+        self,
+        batch,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> dict:
+        """Single validation step: forward pass → loss → metrics → evaluation outputs."""
+        torch.set_grad_enabled(True)
+        result = self._forward_pipeline(batch)
+        torch.set_grad_enabled(False)
+
+        # Loss
+        val_loss = self.calculate_loss(batch, result, name="validation").detach().item()
         self.log_metrics(batch, result, "validation")
-        torch.set_grad_enabled(False)
 
-        losses = {"val_loss": val_loss}
+        logged: dict = {"val_loss": val_loss}
         self.log(
             "validation/val_loss",
             val_loss,
@@ -324,219 +286,214 @@ class GotenModel(pl.LightningModule):
             on_epoch=True,
             batch_size=self._get_num_graphs(batch),
         )
-        if self.evaluator:
-            eval_keys = self.task_handler.get_evaluation_keys()
 
-            losses["outputs"] = {
+        # Evaluation outputs (e.g., for external evaluators)
+        if self.evaluator is not None:
+            eval_keys = self.task_handler.get_evaluation_keys()
+            logged["outputs"] = {
                 "y_pred": result[eval_keys["pred"]].detach().cpu(),
                 "y_true": batch[eval_keys["target"]].detach().cpu(),
             }
+        return logged
 
-        return losses
-
-    def test_step(self, batch, batch_idx, dataloader_idx: int = 0) -> Dict:
-        """
-        Perform a test step.
-
-        Args:
-            batch: Batch of data.
-            batch_idx: Index of the batch.
-            dataloader_idx: Index of the dataloader. Default is 0.
-
-        Returns:
-            Dict: Dictionary of test losses and outputs.
-        """
+    def test_step(  # type: ignore[override]
+        self,
+        batch,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> dict:
+        """Single test step: forward pass → loss → metrics → evaluation outputs."""
         torch.set_grad_enabled(True)
-        self._enable_grads(batch)
-
-        batch.representation, batch.vector_representation = self.representation(batch)
-
-        result = self.calculate_output(batch)
-
+        result = self._forward_pipeline(batch)
         torch.set_grad_enabled(False)
 
-        _test_loss = self.calculate_loss(batch, result).detach().item()
+        self.calculate_loss(batch, result).detach().item()
         self.log_metrics(batch, result, "test")
-        torch.set_grad_enabled(False)
 
-        losses = {
-            loss_dict["prediction"]: result[loss_dict["prediction"]].cpu()
-            for loss_index, loss_dict in enumerate(self.loss_meta)
+        # Collect per-output predictions for analysis
+        logged = {
+            loss_cfg["prediction"]: result[loss_cfg["prediction"]].cpu()
+            for loss_cfg in self.loss_meta
         }
-
-        if self.evaluator:
+        if self.evaluator is not None:
             eval_keys = self.task_handler.get_evaluation_keys()
-
-            losses["outputs"] = {
+            logged["outputs"] = {
                 "y_pred": result[eval_keys["pred"]].detach().cpu(),
                 "y_true": batch[eval_keys["target"]].detach().cpu(),
             }
+        return logged
 
-        return losses
+    # ── Metrics ───────────────────────────────────────────────────────
 
-    def encode(self, batch) -> object:
-        """
-        Encode a batch of data.
+    def log_metrics(self, batch, result: dict, mode: str) -> None:
+        """Compute and log metrics for the given phase (*mode*)."""
+        meta_list, metric_modules = _phase_metric_map(self, mode)
 
-        Args:
-            batch: Batch of data.
-
-        Returns:
-            batch: Batch with added representation.
-        """
-        torch.set_grad_enabled(True)
-        self._enable_grads(batch)
-        batch.representation, batch.vector_representation = self.representation(batch)
-        return batch
-
-    def forward(self, batch) -> Dict:
-        """
-        Forward pass through the model.
-
-        Args:
-            batch: Batch of data.
-
-        Returns:
-            Dict: Model outputs.
-        """
-        torch.set_grad_enabled(True)
-        self._enable_grads(batch)
-        batch.representation, batch.vector_representation = self.representation(batch)
-
-        result = self.calculate_output(batch)
-        torch.set_grad_enabled(False)
-        return result
-
-    def log_metrics(self, batch, result, mode: str) -> None:
-        """
-        Log metrics for a specific mode.
-
-        Args:
-            batch: Batch of data.
-            result: Model outputs.
-            mode: Mode ('train', 'validation', or 'test').
-        """
-        for idx, (metric_meta, metric_module) in enumerate(
-            zip(*self.get_phase_metric(mode), strict=False)
-        ):
-            loss_fn = metric_module
-
-            if "target" in metric_meta.keys():
-                pred, targets = self.task_handler.process_outputs(
-                    batch, result, metric_meta, idx
+        for idx, (meta, metric_fn) in enumerate(zip(meta_list, metric_modules)):
+            # Compute the metric value
+            if "target" in meta:
+                # Supervised metric: compare predictions to ground-truth targets
+                predictions, targets = self.task_handler.process_outputs(
+                    batch, result, meta, idx,
                 )
-
-                pred = pred[:, :] if metric_meta["prediction"] == "force" else pred
-                loss_i = loss_fn(pred, targets).detach().item()
+                if meta["prediction"] == "force":
+                    predictions = predictions[:, :]
+                metric_value = metric_fn(predictions, targets).detach().item()
             else:
-                loss_i = loss_fn(result[metric_meta["prediction"]]).detach().item()
+                # Unsupervised / scalar metric (e.g., uncertainty estimate)
+                metric_value = metric_fn(result[meta["prediction"]]).detach().item()
 
-            lossname = get_function_name(loss_fn)
-
-            if self.task_handler:
-                var_name = self.task_handler.get_metric_names(metric_meta, idx)
-
+            # Log with a human-readable name
+            metric_name = get_function_name(metric_fn)
+            variable_name = (
+                self.task_handler.get_metric_names(meta, idx)
+                if self.task_handler is not None
+                else ""
+            )
             self.log(
-                f"{mode}/{lossname}_{var_name}",
-                loss_i,
+                f"{mode}/{metric_name}_{variable_name}",
+                metric_value,
                 on_step=False,
                 on_epoch=True,
                 batch_size=self._get_num_graphs(batch),
             )
 
-    def calculate_loss(self, batch, result, name: Optional[str] = None) -> torch.Tensor:
+    # ── Loss ──────────────────────────────────────────────────────────
+
+    def calculate_loss(
+        self,
+        batch,
+        result: dict,
+        name: Optional[str] = None,
+    ) -> torch.Tensor:
+        """Compute the total (possibly EMA-smoothed) loss from all loss components.
+
+        Parameters
+        ----------
+        batch : Data
+            Input batch (provides labels).
+        result : dict
+            Output of ``_apply_output_heads``.
+        name : str or None
+            Phase name (``"train"``, ``"validation"``, or ``None`` for no logging).
+
+        Returns
+        -------
+        torch.Tensor
+            Aggregated loss (scalar).
         """
-        Calculate loss for a batch.
+        device = self.device
+        dtype = self.dtype
 
-        Args:
-            batch: Batch of data.
-            result: Model outputs.
-            name: Name of the phase ('train', 'validation', or 'test'). Default is None.
+        total_loss = torch.tensor(0.0, device=device, dtype=dtype)
+        original_total = (
+            torch.tensor(0.0, device=device, dtype=dtype) if self.use_ema else None
+        )
 
-        Returns:
-            torch.Tensor: Loss value.
-        """
-        loss = torch.tensor(0.0, device=self.device, dtype=self.dtype)
-        if self.use_ema:
-            og_loss = torch.tensor(0.0, device=self.device, dtype=self.dtype)
+        for loss_idx, loss_cfg in enumerate(self.loss_meta):
+            loss_fn = self.loss_modules[loss_idx]
 
-        for loss_index, loss_dict in enumerate(self.loss_meta):
-            loss_fn = self.loss_modules[loss_index]
-
-            if "target" in loss_dict.keys():
-                pred, targets = self.task_handler.process_outputs(
-                    batch, result, loss_dict, loss_index
+            # 1. Compute individual loss
+            if "target" in loss_cfg:
+                predictions, targets = self.task_handler.process_outputs(
+                    batch, result, loss_cfg, loss_idx,
                 )
-                loss_i = loss_fn(pred, targets)
+                individual_loss = loss_fn(predictions, targets)
             else:
-                loss_i = loss_fn(result[loss_dict["prediction"]])
+                individual_loss = loss_fn(result[loss_cfg["prediction"]])
 
-            ema_addon = ""
+            # Track original (pre-EMA) loss if EMA is enabled globally
             if self.use_ema:
-                og_loss += loss_dict["loss_weight"] * loss_i
+                original_total = original_total + loss_cfg["loss_weight"] * individual_loss  # type: ignore[operator]
 
-            # Check if EMA should be calculated
-            if (
-                "ema_rate" in loss_dict
-                and name in loss_dict["ema_stages"]
-                and (1.0 > loss_dict["ema_rate"] > 0.0)
-            ):
-                # Calculate EMA loss
-                ema_key = f"{name}_{loss_dict['target']}"
-                ema_addon = "_ema"
-                if self.ema[ema_key] is None:
-                    self.ema[ema_key] = loss_i.detach()
-                else:
-                    loss_ema = (
-                        loss_dict["ema_rate"] * loss_i
-                        + (1 - loss_dict["ema_rate"]) * self.ema[ema_key]
-                    )
-                    self.ema[ema_key] = loss_ema.detach()
-                    if self.use_ema:
-                        loss_i = loss_ema
+            # 2. Apply per-loss EMA smoothing if configured
+            individual_loss = self._maybe_apply_ema_smoothing(
+                loss_cfg, individual_loss, name,
+            )
 
-            if name:
+            # 3. Log the individual loss component
+            if name is not None:
+                log_key = f"{name}/{loss_cfg['prediction']}_loss"
                 self.log(
-                    f"{name}/{loss_dict['prediction']}{ema_addon}_loss",
-                    loss_i,
-                    on_step=True if name == "train" else False,
+                    log_key,
+                    individual_loss,
+                    on_step=(name == "train"),
                     on_epoch=True,
-                    prog_bar=True if name == "train" else False,
+                    prog_bar=(name == "train"),
                     batch_size=self._get_num_graphs(batch),
                 )
-            loss += loss_dict["loss_weight"] * loss_i
 
-        if self.use_ema:
+            # 4. Accumulate weighted loss
+            total_loss = total_loss + loss_cfg["loss_weight"] * individual_loss
+
+        # Log the original (un-smoothed) total if EMA is active
+        if self.use_ema and name is not None:
             self.log(
                 f"{name}/val_loss_og",
-                og_loss,
-                on_step=True if name == "train" else False,
+                original_total,
+                on_step=(name == "train"),
                 on_epoch=True,
                 batch_size=self._get_num_graphs(batch),
             )
 
-        return loss
+        return total_loss
+
+    def _maybe_apply_ema_smoothing(
+        self,
+        loss_cfg: dict,
+        current_loss: torch.Tensor,
+        phase_name: Optional[str],
+    ) -> torch.Tensor:
+        """Apply exponential moving average smoothing to *current_loss* if configured.
+
+        If the loss configuration has an ``ema_rate`` and the current *phase_name*
+        is one of the configured ``ema_stages``, the returned value is the EMA-smoothed
+        version of the loss. Otherwise *current_loss* is returned unchanged.
+        """
+        ema_rate = loss_cfg.get("ema_rate")
+        ema_stages = loss_cfg.get("ema_stages", [])
+        # Only smooth if all criteria are met
+        if (
+            ema_rate is None
+            or phase_name is None
+            or phase_name not in ema_stages
+            or not (0.0 < ema_rate < 1.0)
+        ):
+            return current_loss
+
+        ema_key = f"{phase_name}_{loss_cfg['target']}"
+        smoothed = self.ema[ema_key]
+
+        if smoothed is None:
+            # First time: store raw loss as the initial EMA value
+            self.ema[ema_key] = current_loss.detach()
+        else:
+            # EMA update: ema = rate * new + (1 - rate) * old
+            smoothed = ema_rate * current_loss + (1.0 - ema_rate) * smoothed
+            self.ema[ema_key] = smoothed.detach()
+            current_loss = smoothed
+
+        return current_loss
+
+    # ── Optimizer ─────────────────────────────────────────────────────
 
     def configure_optimizers(self) -> tuple:
-        """
-        Configure optimizers and learning rate schedulers.
-
-        Returns:
-            tuple: Tuple of (optimizers, schedulers).
-        """
+        """Set up AdamW optimizer and learning-rate scheduler."""
         optimizer = opt.AdamW(
             self.trainer.model.parameters(),
             lr=self.lr,
             weight_decay=self.weight_decay,
-            # amsgrad=True, # changed based on gemnet
             eps=1e-7,
         )
 
         if self.scheduler:
+            # Custom scheduler configuration (typically CosineAnnealingLR params)
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer=optimizer, **self.scheduler
+                optimizer=optimizer,
+                **self.scheduler,
             )
         else:
+            # Default: ReduceLROnPlateau with stored hyper-parameters
             scheduler = opt.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 factor=self.lr_decay,
@@ -544,44 +501,35 @@ class GotenModel(pl.LightningModule):
                 min_lr=self.lr_minlr,
             )
 
-        schedule = {
-            "scheduler": scheduler,
-            "monitor": self.lr_monitor,
-            "interval": "epoch",
-            "frequency": 1,
-            "strict": True,
-        }
+        return [optimizer], [
+            {
+                "scheduler": scheduler,
+                "monitor": self.lr_monitor,
+                "interval": "epoch",
+                "frequency": 1,
+                "strict": True,
+            },
+        ]
 
-        return [optimizer], [schedule]
+    def optimizer_step(self, *args, **kwargs) -> None:  # type: ignore[override]
+        """Override optimisation step to support linear LR warmup.
 
-    def optimizer_step(self, *args, **kwargs) -> None:
+        During the first ``lr_warmup_steps`` iterations the learning rate is
+        linearly scaled from 0 up to the configured ``lr``.
         """
-        Perform an optimizer step with learning rate warmup.
+        # Extract the optimizer from positional or keyword arguments
+        optimizer = kwargs.get("optimizer")
+        if optimizer is None and len(args) > 2:
+            optimizer = args[2]
 
-        Args:
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
-        """
-        optimizer = kwargs["optimizer"] if "optimizer" in kwargs else args[2]
-
-        if self.trainer.global_step < self.hparams.lr_warmup_steps:
-            lr_scale = min(
-                1.0,
-                float(self.trainer.global_step + 1)
-                / float(self.hparams.lr_warmup_steps),
+        # Linear warmup: scale LR up over the warmup period
+        if self.trainer.global_step < self.lr_warmup_steps:
+            progress = float(self.trainer.global_step + 1) / float(
+                max(1, self.lr_warmup_steps)
             )
-            for pg in optimizer.param_groups:
-                pg["lr"] = lr_scale * self.hparams.lr
+            scale = min(1.0, progress)
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = scale * self.lr
 
         super().optimizer_step(*args, **kwargs)
         optimizer.zero_grad()
-
-    def _enable_grads(self, batch) -> None:
-        """
-        Enable gradients for position tensor if derivatives are required.
-
-        Args:
-            batch: Batch of data.
-        """
-        if self.requires_dr:
-            batch.pos.requires_grad_()

@@ -3,7 +3,7 @@ _target_: src.data.module.DataModule
 hparams:
   dataset: QM9
   dataset_slug: qm9
-  dataset_arg:
+  label:
   dataset_root: ${paths.data_dir}/qm9 # data_path is specified in config.yaml
   derivative: false
   split_mode: null

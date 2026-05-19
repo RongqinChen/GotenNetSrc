@@ -49,9 +49,6 @@ class DataModule(LightningDataModule):
         Args:
             hparams: Hyperparameters for the datamodule.
         """
-        # Check if hparams is omegaconf.dictconfig.DictConfig
-        if type(hparams) == "omegaconf.dictconfig.DictConfig":
-            hparams = dict(hparams)
         super(DataModule, self).__init__()
         hparams = dict(hparams)
 
@@ -104,17 +101,13 @@ class DataModule(LightningDataModule):
         dataset_type = self.hparams["dataset"]
 
         # Validate dataset type is supported
-        assert hasattr(
-            self, f"_prepare_{dataset_type}"
-        ), f"Dataset {dataset_type} not defined"
+        assert hasattr(self, f"_prepare_{dataset_type}"), f"Dataset {dataset_type} not defined"
 
         # Call the appropriate dataset preparation method
         dataset_preparer = lambda t: getattr(self, f"_prepare_{t}")()
         self.idx_train, self.idx_val, self.idx_test = dataset_preparer(dataset_type)
 
-        log.info(
-            f"train {len(self.idx_train)}, val {len(self.idx_val)}, test {len(self.idx_test)}"
-        )
+        log.info(f"train {len(self.idx_train)}, val {len(self.idx_val)}, test {len(self.idx_test)}")
 
         # Set up dataset subsets
         self.train_dataset = self.dataset[self.idx_train]

@@ -134,7 +134,11 @@ class ExpNormalSmearing(nn.Module):
 
     def forward(self, dist):
         dist = dist.unsqueeze(-1)
-        return self.cutoff_fn(dist) * torch.exp(-self.betas * (torch.exp(self.alpha * (-dist)) - self.means) ** 2)
+        # Match the paper's notation where the radial basis φ(r) and cutoff ϕ(r)
+        # are applied as separate factors in the interaction equations.
+        return torch.exp(
+            -self.betas * (torch.exp(self.alpha * (-dist)) - self.means) ** 2
+        )
 
 
 def str2basis(input_str):

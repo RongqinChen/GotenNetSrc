@@ -12,8 +12,8 @@ datamodule:
     seed: 1
     standardize: true
     splits: 0
-    batch_size: 32
-    inference_batch_size: 32
+    batch_size: 4
+    inference_batch_size: 4
 
 model:
   lr: 0.0002
@@ -21,37 +21,33 @@ model:
   lr_monitor: "validation/val_loss"
   lr_minlr: 1.e-07
   lr_patience: 30
-  weight_decay: 0.0
-  use_ema: True
+  weight_decay: 0.01
   task_config:
     task_loss: "MSELoss"
-    ema_rates:
-        - 0.05
-        - 1.00
     loss_weights:
         - 0.05
         - 0.95
 
   representation:
-    n_interactions: 8
-    n_atom_basis: 256
+    n_interactions: 12
+    n_atom_basis: 192
     radial_basis: "expnorm"
-    n_rbf: 64
-    edge_updates: "linw_mlpa"
+    n_rbf: 32
+    edge_updates: "linw"
     lmax: 2
-    evec_dim: 256
-    emlp_dim: 256
+    evec_dim: 768
   output:
-    n_hidden: 256
+    n_hidden: 192
 
 trainer:
   max_epochs: 3000
   inference_mode: False
+  gradient_clip_val: 10.0
 
 callbacks:
   early_stopping:
     monitor: "validation/val_loss_og"
-    patience: 1000 
+    patience: 3000 
   model_checkpoint:
     monitor: "validation/val_loss_og"
 project: "ExpressiveGeoNet_rmd17"

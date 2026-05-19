@@ -1,0 +1,188 @@
+paper:
+  title: "GotenNet: Rethinking Efficient 3D Equivariant Graph Neural Networks"
+  source_pdf: "docs/research/13629_GotenNet_Rethinking_Effi.pdf"
+
+notes:
+  - "This manifest mirrors the paper-reported settings and points to the runnable Hydra configs in `configs/experiment/`."
+  - "QM9 and MD22 learning rates are reported as ranges in Table 6; the manuscript does not specify an exact target-by-target assignment."
+  - "The runnable QM9 and MD22 base configs use the upper end of the paper-reported LR range unless overridden."
+  - "EMA is not enabled in the paper reproduction configs because the manuscript does not report EMA as part of the training setup."
+
+common_optimization:
+  optimizer: "AdamW"
+  scheduler: "Linear warmup + ReduceLROnPlateau"
+  lr_decay: 0.8
+  dropout_rate: 0.1
+  lmax: 2
+  num_attention_heads: 8
+
+experiments:
+  qm9_small:
+    hydra_config: "configs/experiment/qm9_small.yaml"
+    labels: ["mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv"]
+    paper_variant: "GotenNetS"
+    optimization:
+      warmup_steps: 10000
+      learning_rate_range: [0.00006, 0.0001]
+      lr_patience: 15
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 10.0
+      max_epochs: 1000
+    model:
+      n_interactions: 4
+      n_atom_basis: 256
+      edge_dim: 256
+      edge_refinement_dim: 256
+      n_rbf: 64
+      cutoff: 5.0
+      edge_updates: true
+
+  qm9_base:
+    hydra_config: "configs/experiment/qm9.yaml"
+    labels: ["mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv"]
+    paper_variant: "GotenNetB"
+    optimization:
+      warmup_steps: 10000
+      learning_rate_range: [0.00006, 0.0001]
+      lr_patience: 15
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 10.0
+      max_epochs: 1000
+    model:
+      n_interactions: 6
+      n_atom_basis: 256
+      edge_dim: 256
+      edge_refinement_dim: 256
+      n_rbf: 64
+      cutoff: 5.0
+      edge_updates: true
+
+  qm9_large:
+    hydra_config: "configs/experiment/qm9_large.yaml"
+    labels: ["mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv"]
+    paper_variant: "GotenNetL"
+    optimization:
+      warmup_steps: 10000
+      learning_rate_range: [0.00006, 0.0001]
+      lr_patience: 15
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 10.0
+      max_epochs: 1000
+    model:
+      n_interactions: 12
+      n_atom_basis: 256
+      edge_dim: 256
+      edge_refinement_dim: 256
+      n_rbf: 64
+      cutoff: 5.0
+      edge_updates: true
+
+  molecule3d_base:
+    hydra_config: "configs/experiment/molecule3d.yaml"
+    labels: ["homo", "lumo", "gap", "scf_energy", "dipole_x", "dipole_y", "dipole_z"]
+    optimization:
+      warmup_steps: 5000
+      learning_rate: 0.0001
+      lr_patience: 5
+      weight_decay: 0.01
+      loss: "L1"
+      gradient_clip_val: 0.0
+      max_epochs: 300
+      batch_size: 256
+    model:
+      n_interactions: 12
+      n_atom_basis: 384
+      edge_dim: 384
+      edge_refinement_dim: 384
+      n_rbf: 32
+      cutoff: 5.0
+      edge_updates: true
+
+  md22_base:
+    hydra_config: "configs/experiment/md22.yaml"
+    labels: ["at_at", "at_at_cg_cg", "ac_ala3_nhme", "dha", "buckycatcher", "double_walled_nanotube", "stachyose"]
+    optimization:
+      warmup_steps: 1000
+      learning_rate_range: [0.00004, 0.0001]
+      lr_patience: 30
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 5.0
+      max_epochs: 3000
+      batch_size: 4
+    model:
+      n_interactions: 6
+      n_atom_basis: 256
+      edge_dim: 256
+      edge_refinement_dim: 768
+      n_rbf: 32
+      cutoff: 5.0
+      edge_updates: "linw"
+
+  md22_compact:
+    hydra_config: "configs/experiment/md22_compact.yaml"
+    labels: ["at_at", "at_at_cg_cg", "ac_ala3_nhme", "dha", "buckycatcher", "double_walled_nanotube", "stachyose"]
+    note: "Compact MD22 variant described in the appendix text: 4 layers and halved representation width."
+    optimization:
+      warmup_steps: 1000
+      learning_rate_range: [0.00004, 0.0001]
+      lr_patience: 30
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 5.0
+      max_epochs: 3000
+      batch_size: 4
+    model:
+      n_interactions: 4
+      n_atom_basis: 128
+      edge_dim: 128
+      edge_refinement_dim: 384
+      n_rbf: 32
+      cutoff: 5.0
+      edge_updates: "linw"
+
+  md22_wide:
+    hydra_config: "configs/experiment/md22_wide.yaml"
+    labels: ["at_at", "at_at_cg_cg", "ac_ala3_nhme", "dha", "buckycatcher", "double_walled_nanotube", "stachyose"]
+    note: "Alternative MD22 setting encoded from the Table 6 ranges for width, depth, and cutoff."
+    optimization:
+      warmup_steps: 1000
+      learning_rate_range: [0.00004, 0.0001]
+      lr_patience: 30
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 5.0
+      max_epochs: 3000
+      batch_size: 4
+    model:
+      n_interactions: 8
+      n_atom_basis: 384
+      edge_dim: 384
+      edge_refinement_dim: 768
+      n_rbf: 32
+      cutoff: 4.0
+      edge_updates: "linw"
+
+  rmd17_base:
+    hydra_config: "configs/experiment/rmd17.yaml"
+    labels: ["aspirin", "azobenzene", "benzene", "ethanol", "malonaldehyde", "naphthalene", "paracetamol", "salicylic", "toluene", "uracil"]
+    optimization:
+      warmup_steps: 1000
+      learning_rate: 0.0002
+      lr_patience: 30
+      weight_decay: 0.01
+      loss: "MSE"
+      gradient_clip_val: 10.0
+      max_epochs: 3000
+      batch_size: 4
+    model:
+      n_interactions: 12
+      n_atom_basis: 192
+      edge_dim: 192
+      edge_refinement_dim: 768
+      n_rbf: 32
+      cutoff: 5.0
+      edge_updates: "linw"

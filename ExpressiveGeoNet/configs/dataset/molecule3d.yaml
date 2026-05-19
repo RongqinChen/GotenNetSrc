@@ -3,7 +3,7 @@ _target_: src.data.module.DataModule
 hparams:
   dataset: Molecule3D
   dataset_slug: molecule3d
-  dataset_arg:
+  label:
   dataset_root: ${paths.data_dir}/molecule3d # data_path is specified in config.yaml
   derivative: false
   split_mode: null

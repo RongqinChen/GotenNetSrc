@@ -77,6 +77,134 @@ def split_to_components(
     return components
 
 
+class SteerableInit(MessagePassing):
+    """Initialize high-degree steerable features following Eq. 4 in the paper."""
+
+    def __init__(
+        self,
+        n_atom_basis: int,
+        activation: Callable,
+        weight_init: Callable = nn.init.xavier_uniform_,
+        bias_init: Callable = nn.init.zeros_,
+        aggr: str = "add",
+        node_dim: int = 0,
+        cutoff: float = 5.0,
+        num_heads: int = 8,
+        lmax: int = 2,
+        sep_dir: bool = True,
+    ):
+        super().__init__(aggr=aggr, node_dim=node_dim)
+        self.n_atom_basis = n_atom_basis
+        self.num_heads = num_heads
+        self.lmax = lmax
+        self.sep_dir = sep_dir
+        self.multiplier = lmax if sep_dir else 1
+
+        InitDense = partial(Dense, weight_init=weight_init, bias_init=bias_init)
+
+        self.W_q = InitDense(n_atom_basis, n_atom_basis, activation=None)
+        self.W_k = InitDense(n_atom_basis, n_atom_basis, activation=None)
+        self.gamma_v = nn.Sequential(
+            InitDense(n_atom_basis, n_atom_basis, activation=activation),
+            InitDense(
+                n_atom_basis, self.multiplier * n_atom_basis, activation=None
+            ),
+        )
+        self.W_re = InitDense(
+            n_atom_basis,
+            n_atom_basis,
+            activation=activation,
+        )
+        self.W_rs_init = InitDense(
+            n_atom_basis,
+            n_atom_basis * self.multiplier,
+            activation=None,
+        )
+        self.gamma_s = nn.Sequential(
+            InitDense(n_atom_basis, n_atom_basis, activation=activation),
+            InitDense(
+                n_atom_basis, self.multiplier * n_atom_basis, activation=None
+            ),
+        )
+        self.cutoff = CosineCutoff(cutoff)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.W_q.reset_parameters()
+        self.W_k.reset_parameters()
+        self.W_re.reset_parameters()
+        self.W_rs_init.reset_parameters()
+        for layer in self.gamma_v:
+            layer.reset_parameters()
+        for layer in self.gamma_s:
+            layer.reset_parameters()
+
+    def forward(
+        self,
+        edge_index: Tensor,
+        h: Tensor,
+        rl_ij: Tensor,
+        t_ij: Tensor,
+        r_ij: Tensor,
+    ) -> Tensor:
+        q = self.W_q(h).reshape(-1, self.num_heads, self.n_atom_basis // self.num_heads)
+        k = self.W_k(h).reshape(-1, self.num_heads, self.n_atom_basis // self.num_heads)
+        v = self.gamma_v(h)
+        x = self.gamma_s(h)
+        t_ij_attn = self.W_re(t_ij)
+        t_ij_filter = self.W_rs_init(t_ij)
+        return self.propagate(
+            edge_index=edge_index,
+            q=q,
+            k=k,
+            v=v,
+            x=x,
+            t_ij_attn=t_ij_attn,
+            t_ij_filter=t_ij_filter,
+            r_ij=r_ij,
+            rl_ij=rl_ij,
+        )
+
+    def message(
+        self,
+        q_i: Tensor,
+        k_j: Tensor,
+        v_j: Tensor,
+        x_j: Tensor,
+        t_ij_attn: Tensor,
+        t_ij_filter: Tensor,
+        r_ij: Tensor,
+        rl_ij: Tensor,
+        index: Tensor,
+        ptr: OptTensor,
+        dim_size: Optional[int],
+    ) -> Tensor:
+        t_ij_attn = t_ij_attn.reshape(
+            -1, self.num_heads, self.n_atom_basis // self.num_heads
+        )
+        attn = (q_i * k_j * t_ij_attn).sum(dim=-1, keepdim=True)
+        attn = softmax(attn, index, ptr, dim_size)
+        sea_ij = attn * v_j.reshape(
+            -1, self.num_heads, (self.n_atom_basis * self.multiplier) // self.num_heads
+        )
+        sea_ij = sea_ij.reshape(-1, 1, self.n_atom_basis * self.multiplier)
+
+        spatial = (
+            t_ij_filter.unsqueeze(1)
+            * x_j
+            * self.cutoff(r_ij.unsqueeze(-1).unsqueeze(-1))
+        )
+        outputs = sea_ij + spatial
+        components = torch.split(outputs, self.n_atom_basis, dim=-1)
+
+        if self.sep_dir:
+            rl_ij_split = split_to_components(rl_ij[..., None], self.lmax, dim=1)
+            dir_comps = [rl_ij_split[i] * components[i] for i in range(self.lmax)]
+            return torch.cat(dir_comps, dim=1)
+
+        return components[0] * rl_ij[..., None]
+
+
 class GATA(MessagePassing):
     def __init__(
         self,
@@ -94,7 +222,7 @@ class GATA(MessagePassing):
         dropout: float = 0.0,
         edge_updates: Union[bool, str] = True,
         last_layer: bool = False,
-        scale_edge: bool = True,
+        scale_edge: bool = False,
         evec_dim: Optional[int] = None,
         emlp_dim: Optional[int] = None,
         sep_htr: bool = True,
@@ -142,7 +270,7 @@ class GATA(MessagePassing):
         # Parse edge update configuration
         update_info = {
             "gated": False,
-            "rej": True,
+            "rej": False,
             "mlp": False,
             "mlpa": False,
             "lin_w": 0,
@@ -153,6 +281,7 @@ class GATA(MessagePassing):
         allowed_parts = [
             "gated",
             "gatedt",
+            "rej",
             "norej",
             "norm",
             "mlp",
@@ -175,6 +304,8 @@ class GATA(MessagePassing):
             update_info["gated"] = "gatedt"
         if "act" in update_parts:
             update_info["gated"] = "act"
+        if "rej" in update_parts:
+            update_info["rej"] = True
         if "norej" in update_parts:
             update_info["rej"] = False
         if "mlp" in update_parts:
@@ -509,7 +640,7 @@ class GATA(MessagePassing):
         if self.scale_edge:
             norm = torch.sqrt(n_edges.reshape(-1, 1, 1)) / np.sqrt(self.n_atom_basis)
         else:
-            norm = 1.0 / np.sqrt(self.n_atom_basis)
+            norm = 1.0
 
         attn = attn * norm
         self._alpha = attn
@@ -782,16 +913,16 @@ class GotenNet(nn.Module):
         layernorm: str = "",
         steerable_norm: str = "",
         num_heads: int = 8,
-        attn_dropout: float = 0.0,
+        attn_dropout: float = 0.1,
         edge_updates: Union[bool, str] = True,
-        scale_edge: bool = True,
-        lmax: int = 1,
+        scale_edge: bool = False,
+        lmax: int = 2,
         aggr: str = "add",
         evec_dim: Optional[int] = None,
         emlp_dim: Optional[int] = None,
         sep_htr: bool = True,
-        sep_dir: bool = False,
-        sep_tensor: bool = False,
+        sep_dir: bool = True,
+        sep_tensor: bool = True,
         edge_ln: str = "",
     ):
         """
@@ -859,7 +990,20 @@ class GotenNet(nn.Module):
         self.radial_basis = radial_basis(cutoff=self.cutoff, n_rbf=n_rbf)
         self.A_na = nn.Embedding(max_z, n_atom_basis, padding_idx=0)
         self.sh_irreps = e3nn.o3.Irreps.spherical_harmonics(lmax)
-        self.sphere = e3nn.o3.SphericalHarmonics(self.sh_irreps, normalize=False, normalization="norm")
+        self.sphere = e3nn.o3.SphericalHarmonics(
+            self.sh_irreps, normalize=False, normalization="norm"
+        )
+        self.steerable_init = SteerableInit(
+            n_atom_basis=self.n_atom_basis,
+            activation=activation,
+            aggr=aggr,
+            weight_init=weight_init,
+            bias_init=bias_init,
+            cutoff=self.cutoff,
+            num_heads=num_heads,
+            lmax=lmax,
+            sep_dir=sep_dir,
+        )
 
         self.gata_list = nn.ModuleList(
             [
@@ -918,6 +1062,7 @@ class GotenNet(nn.Module):
     def reset_parameters(self):
         self.node_init.reset_parameters()
         self.edge_init.reset_parameters()
+        self.steerable_init.reset_parameters()
         for l in self.gata_list:
             l.reset_parameters()
         for l in self.eqff_list:
@@ -958,9 +1103,18 @@ class GotenNet(nn.Module):
         )
         n_edges = num_edges[edge_index[0]]
 
-        hs = h.shape
-        X = torch.zeros((hs[0], equi_dim, hs[1]), device=h.device)
         h.unsqueeze_(1)
+        X = self.steerable_init(
+            edge_index=edge_index,
+            h=h,
+            rl_ij=rl_ij,
+            t_ij=t_ij_init,
+            r_ij=edge_diff,
+        )
+
+        hs = h.shape
+        if X is None:
+            X = torch.zeros((hs[0], equi_dim, hs[2]), device=h.device)
         t_ij = t_ij_init
         for _i, (gata, eqff) in enumerate(
             zip(self.gata_list, self.eqff_list, strict=False)
