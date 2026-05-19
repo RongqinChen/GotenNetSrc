@@ -81,6 +81,7 @@ class GotenModel(pl.LightningModule):
         **kwargs: Any,
     ):
         super().__init__()
+        dataset_meta = self._sanitize_dataset_meta(dataset_meta)
 
         # ── Store hyper-parameters for checkpointing ──────────────────
         self.save_hyperparameters()
@@ -102,10 +103,8 @@ class GotenModel(pl.LightningModule):
         self.save_predictions = save_predictions
         self.scheduler = scheduler  # dict forwarded to CosineAnnealingLR
 
-        # Store metadata (pop dataset object if present — used downstream)
+        # Store lightweight dataset metadata used by task heads.
         self.dataset_meta = dataset_meta
-        if dataset_meta is not None and "dataset" in dataset_meta:
-            dataset_meta.pop("dataset")
 
         # ── Representation encoder ────────────────────────────────────
         self.representation = self._maybe_hydra_instantiate(representation)
@@ -186,6 +185,16 @@ class GotenModel(pl.LightningModule):
             if "ema_rate" in cfg and "ema_stages" not in cfg:
                 cfg["ema_stages"] = ["train", "validation"]
         return loss_configs
+
+    @staticmethod
+    def _sanitize_dataset_meta(dataset_meta: Optional[dict]) -> Optional[dict]:
+        """Strip heavy runtime-only objects before hparams are serialized."""
+        if dataset_meta is None:
+            return None
+
+        sanitized = dict(dataset_meta)
+        sanitized.pop("dataset", None)
+        return sanitized
 
     @staticmethod
     def _get_num_graphs(batch) -> int:

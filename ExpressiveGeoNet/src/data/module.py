@@ -107,12 +107,19 @@ class DataModule(LightningDataModule):
         self._reset_dataset_state()
 
     def get_metadata(self, label: str | None = None) -> dict[str, Any]:
-        """Return dataset metadata (atomref, dataset ref, stats) for task heads."""
+        """Return lightweight dataset metadata needed by task heads.
+
+        The full dataset object is intentionally excluded so logger/checkpoint
+        hyperparameter serialization cannot accidentally traverse cached PyG
+        tensors such as ``edge_attr``.
+        """
         self._update_label(label)
         self._ensure_loaded()
+        atomref = self.atomref
+        if isinstance(atomref, torch.Tensor):
+            atomref = atomref.detach().clone()
         return {
-            "atomref": self.atomref,
-            "dataset": self.dataset,
+            "atomref": atomref,
             "mean": self.mean,
             "std": self.std,
         }

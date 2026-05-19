@@ -17,6 +17,34 @@ python train.py experiment=qm9_small logger=tensorboard label=U0
 python train.py experiment=qm9_small logger=tensorboard label=zpve  
 
 
+python train.py experiment=qm9 logger=tensorboard label=mu    
+python train.py experiment=qm9 logger=tensorboard label=alpha 
+python train.py experiment=qm9 logger=tensorboard label=homo  
+python train.py experiment=qm9 logger=tensorboard label=lumo  
+python train.py experiment=qm9 logger=tensorboard label=gap   
+python train.py experiment=qm9 logger=tensorboard label=r2    
+python train.py experiment=qm9 logger=tensorboard label=Cv    
+python train.py experiment=qm9 logger=tensorboard label=G     
+python train.py experiment=qm9 logger=tensorboard label=H     
+python train.py experiment=qm9 logger=tensorboard label=U     
+python train.py experiment=qm9 logger=tensorboard label=U0    
+python train.py experiment=qm9 logger=tensorboard label=zpve  
+
+
+python train.py experiment=qm9_large logger=tensorboard label=mu    
+python train.py experiment=qm9_large logger=tensorboard label=alpha 
+python train.py experiment=qm9_large logger=tensorboard label=homo  
+python train.py experiment=qm9_large logger=tensorboard label=lumo  
+python train.py experiment=qm9_large logger=tensorboard label=gap   
+python train.py experiment=qm9_large logger=tensorboard label=r2    
+python train.py experiment=qm9_large logger=tensorboard label=Cv    
+python train.py experiment=qm9_large logger=tensorboard label=G     
+python train.py experiment=qm9_large logger=tensorboard label=H     
+python train.py experiment=qm9_large logger=tensorboard label=U     
+python train.py experiment=qm9_large logger=tensorboard label=U0    
+python train.py experiment=qm9_large logger=tensorboard label=zpve  
+
+
 python train.py experiment=rmd17 logger=tensorboard label=aspirin         
 python train.py experiment=rmd17 logger=tensorboard label=azobenzene      
 python train.py experiment=rmd17 logger=tensorboard label=benzene         
@@ -36,6 +64,25 @@ python train.py experiment=md22 logger=tensorboard label=dha
 python train.py experiment=md22 logger=tensorboard label=buckycatcher    
 python train.py experiment=md22 logger=tensorboard label=double_walled_nanotube  
 python train.py experiment=md22 logger=tensorboard label=stachyose      
+
+
+python train.py experiment=md22_wide logger=tensorboard label=at_at    
+python train.py experiment=md22_wide logger=tensorboard label=at_at_cg_cg    
+python train.py experiment=md22_wide logger=tensorboard label=ac_ala3_nhme   
+python train.py experiment=md22_wide logger=tensorboard label=dha             
+python train.py experiment=md22_wide logger=tensorboard label=buckycatcher    
+python train.py experiment=md22_wide logger=tensorboard label=double_walled_nanotube  
+python train.py experiment=md22_wide logger=tensorboard label=stachyose      
+
+
+python train.py experiment=md22_compact logger=tensorboard label=at_at    
+python train.py experiment=md22_compact logger=tensorboard label=at_at_cg_cg    
+python train.py experiment=md22_compact logger=tensorboard label=ac_ala3_nhme   
+python train.py experiment=md22_compact logger=tensorboard label=dha             
+python train.py experiment=md22_compact logger=tensorboard label=buckycatcher    
+python train.py experiment=md22_compact logger=tensorboard label=double_walled_nanotube  
+python train.py experiment=md22_compact logger=tensorboard label=stachyose      
+
 
 python train.py experiment=molecule3d logger=tensorboard label=homo        
 python train.py experiment=molecule3d logger=tensorboard label=lumo        
