@@ -98,7 +98,7 @@ def train(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
             ckpt_path = runtime_cfg.ckpt_path
 
         log.info("Starting testing.")
-        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path, weights_only=False)
 
     if not runtime_cfg.trainer.get("fast_dev_run") and runtime_cfg.get("train"):
         log.info("Best model checkpoint: %s", trainer.checkpoint_callback.best_model_path)

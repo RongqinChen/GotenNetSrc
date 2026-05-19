@@ -9,8 +9,8 @@ defaults:
 
 datamodule:
   hparams:
-    batch_size: 256
-    inference_batch_size: 256
+    batch_size: 64
+    inference_batch_size: 64
     seed: 1
     standardize: true
 
@@ -24,7 +24,7 @@ model:
   task_config:
     task_loss: "L1Loss"
   representation:
-    n_interactions: 12
+    n_interactions: 6
     n_atom_basis: 384
     radial_basis: "expnorm"
     n_rbf: 32
@@ -34,7 +34,7 @@ model:
 
 trainer:
   max_epochs: 300
-  gradient_clip_val: 0.0
+  gradient_clip_val: 10.0
 
 callbacks:
   early_stopping:
