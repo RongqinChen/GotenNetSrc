@@ -85,6 +85,21 @@ class Molecule3D(InMemoryDataset):
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[0], weights_only=False)
 
+    @staticmethod
+    def _normalize_relpath(split_config: str, rel_path: str) -> str:
+        """Map Hugging Face split-prefixed paths into config-local filenames."""
+        normalized = rel_path.replace("\\", "/").lstrip("./")
+        prefix = f"{split_config}/"
+        if normalized.startswith(prefix):
+            return normalized[len(prefix):]
+        return normalized
+
+    def _config_dir(self) -> str:
+        return osp.join(self.raw_dir, self.split_config)
+
+    def _manifest_path(self) -> str:
+        return osp.join(self._config_dir(), "manifest.json")
+
     @property
     def raw_file_names(self):
         return [osp.join(self.split_config, "manifest.json")]
@@ -136,24 +151,27 @@ class Molecule3D(InMemoryDataset):
         """Download parquet shards for the configured split."""
         os.makedirs(self.raw_dir, exist_ok=True)
 
-        manifest_path = osp.join(self.raw_dir, self.split_config, "manifest.json")
+        manifest_path = self._manifest_path()
         if is_manifest_complete(manifest_path):
             return
 
         manifest = self._fetch_manifest()
         prefix = f"{self.split_config}/"
-        config_files = sorted(f for f in manifest["parquet_files"] if f.startswith(prefix))
-        if not config_files:
+        remote_files = sorted(f for f in manifest["parquet_files"] if f.startswith(prefix))
+        if not remote_files:
             raise RuntimeError(f"No parquet files for config '{self.split_config}'.")
 
-        cfg_dir = osp.join(self.raw_dir, self.split_config)
-        for rel in config_files:
+        cfg_dir = self._config_dir()
+        config_files = []
+        for remote_rel in remote_files:
+            rel = self._normalize_relpath(self.split_config, remote_rel)
+            config_files.append(rel)
             local = osp.join(cfg_dir, rel)
             if osp.exists(local) and osp.getsize(local) > 0:
                 continue
             os.makedirs(osp.dirname(local), exist_ok=True)
 
-            url = f"https://huggingface.co/datasets/maomlab/Molecule3D/resolve/{manifest['revision']}/{rel}"
+            url = f"https://huggingface.co/datasets/maomlab/Molecule3D/resolve/{manifest['revision']}/{remote_rel}"
             stream_download(
                 url, local,
                 description=osp.basename(rel),
@@ -207,7 +225,7 @@ class Molecule3D(InMemoryDataset):
         if Chem is None:
             raise ImportError("Install rdkit: pip install rdkit")
 
-        manifest_path = osp.join(self.raw_dir, self.split_config, "manifest.json")
+        manifest_path = self._manifest_path()
         if not is_manifest_complete(manifest_path):
             rank_zero_warn("Cache incomplete; re-downloading.")
             self.download()
@@ -215,7 +233,7 @@ class Molecule3D(InMemoryDataset):
         with open(manifest_path) as f:
             manifest = json.load(f)
 
-        cfg_dir = osp.join(self.raw_dir, self.split_config)
+        cfg_dir = self._config_dir()
 
         # Group files by split (train / validation / test).
         split_files: dict[str, list[str]] = {"train": [], "validation": [], "test": []}
