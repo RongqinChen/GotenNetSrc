@@ -7,6 +7,7 @@ from typing import Iterable, Optional, Sequence
 
 import hydra
 import torch
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, LightningDataModule, seed_everything
 from pytorch_lightning.loggers import Logger
@@ -55,10 +56,23 @@ def resolve_label(datamodule: LightningDataModule, label: object) -> tuple[objec
     return resolved_label, label_str
 
 
+def resolve_experiment_name(cfg: DictConfig) -> str:
+    """Return the selected experiment config basename, or fall back to ``cfg.name``."""
+    experiment_name = str(cfg.get("name", "default"))
+
+    if HydraConfig.initialized():
+        experiment_choice = HydraConfig.get().runtime.choices.get("experiment")
+        if experiment_choice not in (None, "", "null", "None"):
+            experiment_name = str(experiment_choice)
+
+    return experiment_name
+
+
 def populate_run_metadata(cfg: DictConfig, datamodule: LightningDataModule) -> DictConfig:
     """Populate derived runtime metadata without mutating the caller config."""
     cfg.label, cfg.label_str = resolve_label(datamodule, cfg.label)
-    cfg.name = f"{cfg.label_str}_{cfg.name}"
+    cfg.experiment_name = resolve_experiment_name(cfg)
+    cfg.name = f"{cfg.experiment_name}_{cfg.label_str}"
 
     if hasattr(datamodule, "label"):
         datamodule.label = cfg.label

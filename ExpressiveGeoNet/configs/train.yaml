@@ -40,8 +40,8 @@ test: True
 # seed for random number generators in pytorch, numpy and python.random
 seed: 42
 
-# default name for the experiment, determines logging folder path
-# (you can overwrite this name in experiment configs)
+# fallback run name when no explicit experiment config is selected
+# (logger run names are derived from experiment basename + label)
 name: "default"
 task: "QM9"
 exp: False

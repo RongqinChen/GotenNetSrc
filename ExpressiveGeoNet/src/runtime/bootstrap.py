@@ -7,6 +7,7 @@ from typing import Final
 
 import dotenv
 import torch
+from omegaconf import OmegaConf
 
 from src.common.project import find_config_directory
 
@@ -41,9 +42,21 @@ def configure_tf32(allow_tf32: bool = True) -> None:
         torch.backends.cuda.matmul.allow_tf32 = allow_tf32
 
 
+def register_config_resolvers() -> None:
+    """Register OmegaConf resolvers used by Hydra config files."""
+    if OmegaConf.has_resolver("non_null"):
+        return
+
+    OmegaConf.register_new_resolver(
+        "non_null",
+        lambda value, fallback: fallback if value in (None, "", "null", "None") else value,
+    )
+
+
 def bootstrap_entrypoint(*, allow_tf32: bool = True) -> str:
     """Prepare runtime state for a Hydra entrypoint and return config path."""
     configure_torch_load_compatibility()
     load_environment()
     configure_tf32(allow_tf32=allow_tf32)
+    register_config_resolvers()
     return find_config_directory()

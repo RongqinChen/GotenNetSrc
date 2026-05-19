@@ -84,7 +84,11 @@ class GotenModel(pl.LightningModule):
         dataset_meta = self._sanitize_dataset_meta(dataset_meta)
 
         # ── Store hyper-parameters for checkpointing ──────────────────
-        self.save_hyperparameters()
+        # Logger-side hparams are emitted separately via src.common.logging,
+        # so disable Lightning's automatic hparams logging here to avoid
+        # serializing runtime tensors such as dataset_meta.atomref into
+        # TensorBoard/CSV hparams.yaml files.
+        self.save_hyperparameters(logger=False)
 
         # ── Training hyper-parameters ─────────────────────────────────
         self.lr = lr

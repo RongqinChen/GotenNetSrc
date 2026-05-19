@@ -10,7 +10,7 @@ defaults:
 
 # output directory, generated dynamically on each run
 run:
-  dir: ${paths.log_dir}/${datamodule.hparams.dataset_slug}_${label}_${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  dir: ${paths.log_dir}/${non_null:${hydra:runtime.choices.experiment},${name}}_${label}/${now:%Y-%m-%d}_${now:%H-%M-%S}
 sweep:
-  dir: ${paths.log_dir}/${datamodule.hparams.dataset_slug}_${name}/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  dir: ${paths.log_dir}/${non_null:${hydra:runtime.choices.experiment},${name}}/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}
   subdir: 0

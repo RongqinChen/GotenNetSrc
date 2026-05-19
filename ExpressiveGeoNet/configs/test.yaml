@@ -34,8 +34,8 @@ print_config: True
 ignore_warnings: True
 
 seed: 42
-# default name for the experiment, determines logging folder path
-# (you can overwrite this name in experiment configs)
+# fallback run name when no explicit experiment config is selected
+# (logger run names are derived from experiment basename + label)
 name: "default"
 task: "QM9"
 exp: False
