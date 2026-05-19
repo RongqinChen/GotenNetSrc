@@ -107,7 +107,7 @@ def test(cfg: DictConfig) -> None:
         ckpt_path = cfg.ckpt_path
     else:
         ckpt_path = None
-    trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+    trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path, weights_only=False)
 
     test_metrics = trainer.callback_metrics
     metric_dict = test_metrics

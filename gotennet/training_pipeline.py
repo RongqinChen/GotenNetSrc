@@ -168,7 +168,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
             else:
                 ckpt_path = None
         log.info("Starting testing!")
-        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path, weights_only=False)
 
     # Make sure everything closed properly
     log.info("Finalizing!")
