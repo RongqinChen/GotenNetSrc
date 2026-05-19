@@ -152,6 +152,7 @@ def test(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
         model=model,
         datamodule=datamodule,
         ckpt_path=runtime_cfg.get("ckpt_path"),
+        weights_only=False
     )
 
     object_dict = {
