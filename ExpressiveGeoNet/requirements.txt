@@ -1,2 +1,2 @@
 
-pip install hydra-core python-dotenv pyrootutils wandb rich hydra-optuna-sweeper hydra-colorlog ase scikit-learn pandas pyarrow requests rdkit==2025.3.6 e3nn
+pip install hydra-core python-dotenv pyrootutils wandb rich hydra-optuna-sweeper hydra-colorlog ase scikit-learn pandas pyarrow requests rdkit==2025.3.6 e3nn tensorboard

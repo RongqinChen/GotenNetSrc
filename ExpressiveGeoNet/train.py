@@ -9,7 +9,7 @@ from src.runtime.bootstrap import bootstrap_entrypoint
 from src.runtime.runner import train
 from src.runtime.ui import extras, get_metric_value
 
-CONFIG_DIR = bootstrap_entrypoint(allow_tf32=True)
+CONFIG_DIR = bootstrap_entrypoint(allow_tf32=False)
 
 
 @hydra.main(version_base="1.3", config_path=CONFIG_DIR, config_name="train.yaml")

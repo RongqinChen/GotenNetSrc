@@ -3,48 +3,44 @@
 source ~/miniforge3/bin/activate gnn
 export CUDA_VISIBLE_DEVICES=0
 
-python train.py experiment=qm9.yaml label=mu    logger=csv.yaml
-python train.py experiment=qm9.yaml label=alpha logger=csv.yaml
-python train.py experiment=qm9.yaml label=homo  logger=csv.yaml
-python train.py experiment=qm9.yaml label=lumo  logger=csv.yaml
-python train.py experiment=qm9.yaml label=gap   logger=csv.yaml
-python train.py experiment=qm9.yaml label=r2    logger=csv.yaml
-
-python train.py experiment=qm9.yaml label=Cv    logger=csv.yaml
-python train.py experiment=qm9.yaml label=G     logger=csv.yaml
-python train.py experiment=qm9.yaml label=H     logger=csv.yaml
-python train.py experiment=qm9.yaml label=U     logger=csv.yaml
-python train.py experiment=qm9.yaml label=U0    logger=csv.yaml
-python train.py experiment=qm9.yaml label=zpve  logger=csv.yaml
-
-python train.py experiment=rmd17.yaml label=aspirin         logger=csv.yaml
-python train.py experiment=rmd17.yaml label=azobenzene      logger=csv.yaml
-python train.py experiment=rmd17.yaml label=benzene         logger=csv.yaml
-
-python train.py experiment=rmd17.yaml label=ethanol         logger=csv.yaml
-python train.py experiment=rmd17.yaml label=malonaldehyde   logger=csv.yaml
-python train.py experiment=rmd17.yaml label=naphthalene     logger=csv.yaml
-
-python train.py experiment=rmd17.yaml label=paracetamol     logger=csv.yaml
-python train.py experiment=rmd17.yaml label=salicylic       logger=csv.yaml
-
-python train.py experiment=rmd17.yaml label=toluene         logger=csv.yaml
-python train.py experiment=rmd17.yaml label=uracil          logger=csv.yaml
+python train.py experiment=qm9_small logger=tensorboard label=mu    
+python train.py experiment=qm9_small logger=tensorboard label=alpha 
+python train.py experiment=qm9_small logger=tensorboard label=homo  
+python train.py experiment=qm9_small logger=tensorboard label=lumo  
+python train.py experiment=qm9_small logger=tensorboard label=gap   
+python train.py experiment=qm9_small logger=tensorboard label=r2    
+python train.py experiment=qm9_small logger=tensorboard label=Cv    
+python train.py experiment=qm9_small logger=tensorboard label=G     
+python train.py experiment=qm9_small logger=tensorboard label=H     
+python train.py experiment=qm9_small logger=tensorboard label=U     
+python train.py experiment=qm9_small logger=tensorboard label=U0    
+python train.py experiment=qm9_small logger=tensorboard label=zpve  
 
 
+python train.py experiment=rmd17 logger=tensorboard label=aspirin         
+python train.py experiment=rmd17 logger=tensorboard label=azobenzene      
+python train.py experiment=rmd17 logger=tensorboard label=benzene         
+python train.py experiment=rmd17 logger=tensorboard label=ethanol         
+python train.py experiment=rmd17 logger=tensorboard label=malonaldehyde   
+python train.py experiment=rmd17 logger=tensorboard label=naphthalene     
+python train.py experiment=rmd17 logger=tensorboard label=paracetamol     
+python train.py experiment=rmd17 logger=tensorboard label=salicylic       
+python train.py experiment=rmd17 logger=tensorboard label=toluene         
+python train.py experiment=rmd17 logger=tensorboard label=uracil          
 
-python train.py experiment=md22.yaml logger=csv.yaml label=at_at    
-python train.py experiment=md22.yaml logger=csv.yaml label=at_at_cg_cg    
-python train.py experiment=md22.yaml logger=csv.yaml label=ac_ala3_nhme   
-python train.py experiment=md22.yaml logger=csv.yaml label=dha             
-python train.py experiment=md22.yaml logger=csv.yaml label=buckycatcher    
-python train.py experiment=md22.yaml logger=csv.yaml label=double_walled_nanotube  
-python train.py experiment=md22.yaml logger=csv.yaml label=stachyose      
 
-python train.py experiment=molecule3d.yaml label=homo        logger=csv.yaml
-python train.py experiment=molecule3d.yaml label=lumo        logger=csv.yaml
-python train.py experiment=molecule3d.yaml label=gap         logger=csv.yaml
-python train.py experiment=molecule3d.yaml label=scf_energy  logger=csv.yaml
-python train.py experiment=molecule3d.yaml label=dipole_x    logger=csv.yaml
-python train.py experiment=molecule3d.yaml label=dipole_y    logger=csv.yaml
-python train.py experiment=molecule3d.yaml label=dipole_z    logger=csv.yaml
+python train.py experiment=md22 logger=tensorboard label=at_at    
+python train.py experiment=md22 logger=tensorboard label=at_at_cg_cg    
+python train.py experiment=md22 logger=tensorboard label=ac_ala3_nhme   
+python train.py experiment=md22 logger=tensorboard label=dha             
+python train.py experiment=md22 logger=tensorboard label=buckycatcher    
+python train.py experiment=md22 logger=tensorboard label=double_walled_nanotube  
+python train.py experiment=md22 logger=tensorboard label=stachyose      
+
+python train.py experiment=molecule3d logger=tensorboard label=homo        
+python train.py experiment=molecule3d logger=tensorboard label=lumo        
+python train.py experiment=molecule3d logger=tensorboard label=gap         
+python train.py experiment=molecule3d logger=tensorboard label=scf_energy  
+python train.py experiment=molecule3d logger=tensorboard label=dipole_x    
+python train.py experiment=molecule3d logger=tensorboard label=dipole_y    
+python train.py experiment=molecule3d logger=tensorboard label=dipole_z    

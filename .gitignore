@@ -160,3 +160,5 @@ configs/local/default.yaml
 
 # Aim logging
 .aim
+
+ExpressiveGeoNet/data
