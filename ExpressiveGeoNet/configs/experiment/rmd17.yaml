@@ -46,10 +46,10 @@ trainer:
 
 callbacks:
   early_stopping:
-    monitor: "validation/val_loss_og"
+    monitor: "validation/val_loss"
     patience: 3000 
   model_checkpoint:
-    monitor: "validation/val_loss_og"
+    monitor: "validation/val_loss"
 project: "ExpressiveGeoNet_rmd17"
 
 task: "rMD17"
