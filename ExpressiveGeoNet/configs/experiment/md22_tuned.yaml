@@ -1,0 +1,42 @@
+# @package _global_
+
+defaults:
+  - md22.yaml
+
+datamodule:
+  hparams:
+    batch_size: 4
+    # Validation / test no longer keep higher-order derivative graphs, but MD22
+    # molecules can still be large, so we only scale eval batches moderately.
+    inference_batch_size: 8
+    persistent_workers: true
+    prefetch_factor: 2
+
+model:
+  # Stay inside the paper-reported LR range, but back off from the aggressive
+  # upper bound to reduce force-training spikes across the larger MD22 systems.
+  lr: 0.00008
+  lr_warmup_steps: 1500
+  lr_monitor: "validation/MeanAbsoluteError_force"
+  lr_decay: 0.7
+  lr_patience: 20
+  # In this repo AdamW decay is applied to the full parameter set, so a smaller
+  # value is a safer default when the goal is final accuracy rather than strict
+  # paper-style regularization.
+  weight_decay: 0.001
+  representation:
+    attn_dropout: 0.05
+
+trainer:
+  gradient_clip_val: 5.0
+  gradient_clip_algorithm: norm
+
+callbacks:
+  early_stopping:
+    monitor: "validation/MeanAbsoluteError_force"
+    patience: 500
+    min_delta: 1e-5
+  model_checkpoint:
+    monitor: "validation/MeanAbsoluteError_force"
+
+project: "ExpGeoNet_md22_tuned"
