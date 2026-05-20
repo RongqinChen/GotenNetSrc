@@ -11,4 +11,11 @@ model:
   output:
     n_hidden: 128
 
+datamodule:
+  hparams:
+    seed: 1
+    standardize: true
+    batch_size: 16
+    inference_batch_size: 16
+
 project: "ExpGeoNet_md22_compact"

@@ -12,8 +12,8 @@ datamodule:
     seed: 1
     standardize: true
     splits: 0
-    batch_size: 32
-    inference_batch_size: 32
+    batch_size: 24
+    inference_batch_size: 24
 
 model:
   lr: 0.0002
@@ -30,13 +30,13 @@ model:
     - 0.95
 
   representation:
-    n_interactions: 12
+    n_interactions: 10
     n_atom_basis: 192
     radial_basis: "expnorm"
     n_rbf: 32
     edge_updates: "linw"
     lmax: 2
-    evec_dim: 768
+    evec_dim: 512
   output:
     n_hidden: 192
 
