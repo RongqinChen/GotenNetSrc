@@ -10,8 +10,6 @@ model:
   representation:
     n_interactions: 12
     weight_init: "glo_orthogonal"
-    layernorm: "layer"
-    steerable_norm: "layer"
     residual_scale: 0.5
     edge_residual_scale: 0.25
     edge_updates: "linw_ln_gated"
