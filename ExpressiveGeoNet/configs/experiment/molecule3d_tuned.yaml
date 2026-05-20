@@ -1,0 +1,39 @@
+# @package _global_
+
+defaults:
+  - molecule3d.yaml
+
+datamodule:
+  hparams:
+    batch_size: 64
+    # Molecule3D validation/test do not require force-derivative graphs, so we
+    # can use a larger eval batch than training for better throughput.
+    inference_batch_size: 128
+    persistent_workers: true
+    prefetch_factor: 4
+
+model:
+  # Keep the same overall training recipe, but make optimisation less spiky
+  # and less over-regularized for higher expected final accuracy.
+  lr: 0.00008
+  lr_warmup_steps: 6000
+  lr_monitor: "validation/MeanAbsoluteError_${label_str}"
+  lr_decay: 0.7
+  lr_patience: 8
+  weight_decay: 0.001
+  representation:
+    attn_dropout: 0.05
+
+trainer:
+  gradient_clip_val: 5.0
+  gradient_clip_algorithm: norm
+
+callbacks:
+  early_stopping:
+    monitor: "validation/MeanAbsoluteError_${label_str}"
+    patience: 80
+    min_delta: 1e-5
+  model_checkpoint:
+    monitor: "validation/MeanAbsoluteError_${label_str}"
+
+project: "ExpGeoNet_molecule3d_tuned"
