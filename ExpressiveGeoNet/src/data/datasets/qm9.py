@@ -47,7 +47,9 @@ class QM9(QM9_pyg):
 
     available_properties: list[str] = list(qm9_target_dict.values())
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, label=None):
+    def __init__(
+        self, root, transform=None, pre_transform=None, pre_filter=None, label=None
+    ):
         self.label = self._validate_label(label)
         self.label_idx = _qm9_label_to_idx[self.label]
 
@@ -59,7 +61,12 @@ class QM9(QM9_pyg):
         else:
             transform = Compose([transform, filter_tfm])
 
-        super().__init__(root, transform=transform, pre_transform=pre_transform, pre_filter=pre_filter)
+        super().__init__(
+            root,
+            transform=transform,
+            pre_transform=pre_transform,
+            pre_filter=pre_filter,
+        )
 
     # ── Public helpers ──────────────────────────────────────────────────
 

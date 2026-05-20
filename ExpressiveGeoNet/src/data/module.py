@@ -135,7 +135,12 @@ class DataModule(LightningDataModule):
         preparer = getattr(self, preparer_name)
         idx_train, idx_val, idx_test = preparer()
 
-        log.info("Splits: train=%s, val=%s, test=%s", len(idx_train), len(idx_val), len(idx_test))
+        log.info(
+            "Splits: train=%s, val=%s, test=%s",
+            len(idx_train),
+            len(idx_val),
+            len(idx_test),
+        )
         self.train_dataset = self.dataset[idx_train]
         self.val_dataset = self.dataset[idx_val]
         self.test_dataset = self.dataset[idx_test]
@@ -157,7 +162,9 @@ class DataModule(LightningDataModule):
         self._ensure_loaded()
         return self._build_dataloader(self.test_dataset, stage="test")
 
-    def _build_dataloader(self, dataset, stage: str, *, cache: bool = True) -> DataLoader:
+    def _build_dataloader(
+        self, dataset, stage: str, *, cache: bool = True
+    ) -> DataLoader:
         """Build or return a cached DataLoader for *stage* (train/val/test).
 
         Caching is skipped when ``reload=True`` in the configuration.
@@ -167,13 +174,28 @@ class DataModule(LightningDataModule):
             return self._saved_dataloaders[stage]
 
         is_train = stage == "train"
-        dataloader = DataLoader(
-            dataset=dataset,
-            batch_size=self.hparams["batch_size"] if is_train else self.hparams["inference_batch_size"],
-            shuffle=is_train,
-            num_workers=self.hparams["num_workers"],
-            pin_memory=True,
-        )
+        num_workers = int(self.hparams["num_workers"])
+        dataloader_kwargs = {
+            "dataset": dataset,
+            "batch_size": (
+                self.hparams["batch_size"]
+                if is_train
+                else self.hparams["inference_batch_size"]
+            ),
+            "shuffle": is_train,
+            "num_workers": num_workers,
+            "pin_memory": self.hparams.get("pin_memory", True),
+        }
+
+        if num_workers > 0:
+            dataloader_kwargs["persistent_workers"] = self.hparams.get(
+                "persistent_workers", False
+            )
+            prefetch_factor = self.hparams.get("prefetch_factor")
+            if prefetch_factor is not None:
+                dataloader_kwargs["prefetch_factor"] = int(prefetch_factor)
+
+        dataloader = DataLoader(**dataloader_kwargs)
 
         if cache:
             self._saved_dataloaders[stage] = dataloader
@@ -193,16 +215,22 @@ class DataModule(LightningDataModule):
             return total
         if isinstance(size, float):
             if not 0 < size <= 1:
-                raise ValueError(f"{name}_size as a float must be in (0, 1], got {size}.")
+                raise ValueError(
+                    f"{name}_size as a float must be in (0, 1], got {size}."
+                )
             size = round(total * size)
         size = int(size)
         if size < 0:
             raise ValueError(f"{name}_size must be non-negative, got {size}.")
         if size > total:
-            raise ValueError(f"{name}_size={size} exceeds available {name} samples ({total}).")
+            raise ValueError(
+                f"{name}_size={size} exceeds available {name} samples ({total})."
+            )
         return size
 
-    def _subset_indices(self, indices: torch.Tensor, size: SplitSize, name: str) -> torch.Tensor:
+    def _subset_indices(
+        self, indices: torch.Tensor, size: SplitSize, name: str
+    ) -> torch.Tensor:
         """Take the first *size* elements from *indices*."""
         return indices[: self._resolve_size(size, len(indices), name)]
 
@@ -240,7 +268,9 @@ class DataModule(LightningDataModule):
             desc="computing mean and std",
         )
         try:
-            atomref = self.atomref if self.hparams.get("prior_model") == "Atomref" else None
+            atomref = (
+                self.atomref if self.hparams.get("prior_model") == "Atomref" else None
+            )
             targets = torch.cat(
                 [self._extract_targets(batch, atomref) for batch in loader],
                 dim=0,
@@ -302,9 +332,21 @@ class DataModule(LightningDataModule):
         )
         train_full, val_full, test_full = self.dataset.get_split()
         return (
-            self._subset_indices(torch.as_tensor(train_full, dtype=torch.long), self.hparams["train_size"], "train"),
-            self._subset_indices(torch.as_tensor(val_full, dtype=torch.long), self.hparams["val_size"], "val"),
-            self._subset_indices(torch.as_tensor(test_full, dtype=torch.long), self.hparams["test_size"], "test"),
+            self._subset_indices(
+                torch.as_tensor(train_full, dtype=torch.long),
+                self.hparams["train_size"],
+                "train",
+            ),
+            self._subset_indices(
+                torch.as_tensor(val_full, dtype=torch.long),
+                self.hparams["val_size"],
+                "val",
+            ),
+            self._subset_indices(
+                torch.as_tensor(test_full, dtype=torch.long),
+                self.hparams["test_size"],
+                "test",
+            ),
         )
 
     def _prepare_rmd17(self):

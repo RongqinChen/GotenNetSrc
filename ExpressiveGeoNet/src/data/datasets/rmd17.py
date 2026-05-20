@@ -54,7 +54,9 @@ class rMD17(InMemoryDataset):
 
     available_molecules = list(molecule_files.keys())
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, label=None):
+    def __init__(
+        self, root, transform=None, pre_transform=None, pre_filter=None, label=None
+    ):
         self.molecules = parse_csv_selection(
             label,
             available=self.available_molecules,
@@ -74,7 +76,10 @@ class rMD17(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return [osp.join("rmd17", "npz_data", self.molecule_files[m]) for m in self.molecules]
+        return [
+            osp.join("rmd17", "npz_data", self.molecule_files[m])
+            for m in self.molecules
+        ]
 
     @property
     def processed_file_names(self):
@@ -89,7 +94,9 @@ class rMD17(InMemoryDataset):
             raise ValueError("rMD17 split index must be in [0, 4].")
 
         def _load_csv(name: str) -> list[int]:
-            path = osp.join(self.root, "raw", "rmd17", "splits", f"{name}_0{idx + 1}.csv")
+            path = osp.join(
+                self.root, "raw", "rmd17", "splits", f"{name}_0{idx + 1}.csv"
+            )
             with open(path) as f:
                 return [int(line.strip()) for line in f]
 
@@ -137,7 +144,9 @@ class rMD17(InMemoryDataset):
             energies = torch.from_numpy(data["energies"]).float().unsqueeze_(1)
             forces = torch.from_numpy(data["forces"]).float()
 
-            for pos, energy, force in tqdm(zip(positions, energies, forces), total=len(energies)):
+            for pos, energy, force in tqdm(
+                zip(positions, energies, forces), total=len(energies)
+            ):
                 sample = Data(z=atomic_numbers, pos=pos, y=energy, dy=force)
 
                 if self.pre_filter is not None and not self.pre_filter(sample):

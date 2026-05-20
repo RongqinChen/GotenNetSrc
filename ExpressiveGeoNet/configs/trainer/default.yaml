@@ -9,3 +9,4 @@ strategy: auto
 # number of validation steps to execute at the beginning of the training
 num_sanity_val_steps: 0
 gradient_clip_val: 5.0
+gradient_clip_algorithm: norm

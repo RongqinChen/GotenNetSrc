@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+- qm9.yaml
+
+# Prefer the faster float32 matmul path, and enable TF32 on supported CUDA
+# hardware. This is a no-op on CPU-only and pre-Ampere environments.
+matmul_precision: high
+allow_tf32: true
+
+datamodule:
+  hparams:
+    batch_size: 64
+
+model:
+  lr: 0.00008
+  lr_warmup_steps: 8000
+  lr_decay: 0.7
+  lr_patience: 12
+  representation:
+    attn_dropout: 0.05
+
+callbacks:
+  early_stopping:
+    monitor: "validation/MeanAbsoluteError_${label_str}"
+    patience: 100
+    min_delta: 1e-5
+  model_checkpoint:
+    monitor: "validation/MeanAbsoluteError_${label_str}"
+
+project: "ExpGeoNet_qm9_tuned"

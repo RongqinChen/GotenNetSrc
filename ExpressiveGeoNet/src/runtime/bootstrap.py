@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 
 from src.common.project import find_config_directory
 
-_PATCH_FLAG: Final[str] = "_expressivegeonet_patched"
+_PATCH_FLAG: Final[str] = "_ExpGeoNet_patched"
 
 
 def configure_torch_load_compatibility() -> None:
@@ -49,7 +49,9 @@ def register_config_resolvers() -> None:
 
     OmegaConf.register_new_resolver(
         "non_null",
-        lambda value, fallback: fallback if value in (None, "", "null", "None") else value,
+        lambda value, fallback: (
+            fallback if value in (None, "", "null", "None") else value
+        ),
     )
 
 

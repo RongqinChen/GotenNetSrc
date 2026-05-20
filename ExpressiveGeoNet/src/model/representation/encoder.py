@@ -230,6 +230,8 @@ class GATA(MessagePassing):
         sep_tensor: bool = True,
         lmax: int = 2,
         edge_ln: str = "",
+        residual_scale: float = 1.0,
+        edge_residual_scale: Optional[float] = None,
     ):
         """
         Graph Attention Transformer Architecture.
@@ -327,6 +329,10 @@ class GATA(MessagePassing):
         self.dropout = dropout
         self.n_atom_basis = n_atom_basis
         self.lmax = lmax
+        self.residual_scale = residual_scale
+        self.edge_residual_scale = (
+            residual_scale if edge_residual_scale is None else edge_residual_scale
+        )
 
         # Calculate multiplier based on configuration
         multiplier = 3
@@ -557,8 +563,8 @@ class GATA(MessagePassing):
             n_edges=n_edges,
         )
 
-        h = h + d_h
-        X = X + d_X
+        h = h + self.residual_scale * d_h
+        X = X + self.residual_scale * d_X
 
         if not self.last_layer and self.edge_updates:
             X_htr = X
@@ -576,7 +582,7 @@ class GATA(MessagePassing):
 
             # edge_updater_type: (EQ: Tensor, EK:Tensor, rl_ij: Tensor, t_ij: Tensor)
             dt_ij = self.edge_updater(edge_index, EQ=EQ, EK=EK, rl_ij=rl_ij, t_ij=t_ij)
-            t_ij = t_ij + dt_ij
+            t_ij = t_ij + self.edge_residual_scale * dt_ij
             self._alpha = None
             return h, X, t_ij
 
@@ -811,6 +817,7 @@ class EQFF(nn.Module):
         epsilon: float = 1e-8,
         weight_init: Callable = nn.init.xavier_uniform_,
         bias_init: Callable = nn.init.zeros_,
+        residual_scale: float = 1.0,
     ):
         """
         Initialize EQFF module.
@@ -827,6 +834,7 @@ class EQFF(nn.Module):
         self.lmax = lmax
         self.n_atom_basis = n_atom_basis
         self.epsilon = epsilon
+        self.residual_scale = residual_scale
 
         InitDense = partial(Dense, weight_init=weight_init, bias_init=bias_init)
 
@@ -876,8 +884,8 @@ class EQFF(nn.Module):
         dX_intra = m2 * X_p
 
         # Update features with residual connections
-        h = h + m1
-        X = X + dX_intra
+        h = h + self.residual_scale * m1
+        X = X + self.residual_scale * dX_intra
 
         return h, X
 
@@ -924,6 +932,8 @@ class GotenNet(nn.Module):
         sep_dir: bool = True,
         sep_tensor: bool = True,
         edge_ln: str = "",
+        residual_scale: float = 1.0,
+        edge_residual_scale: float = 1.0,
     ):
         """
         Initialize GotenNet model.
@@ -954,6 +964,8 @@ class GotenNet(nn.Module):
             sep_htr: Whether to separate vector features in interaction.
             sep_dir: Whether to separate direction features.
             sep_tensor: Whether to separate tensor features.
+            residual_scale: Scaling factor for node residual updates.
+            edge_residual_scale: Scaling factor for edge residual updates.
         """
         super(GotenNet, self).__init__()
 
@@ -1029,6 +1041,8 @@ class GotenNet(nn.Module):
                     sep_tensor=sep_tensor,
                     lmax=lmax,
                     edge_ln=edge_ln,
+                    residual_scale=residual_scale,
+                    edge_residual_scale=edge_residual_scale,
                 )
                 for i in range(self.n_interactions)
             ]
@@ -1043,6 +1057,7 @@ class GotenNet(nn.Module):
                     epsilon=epsilon,
                     weight_init=weight_init,
                     bias_init=bias_init,
+                    residual_scale=residual_scale,
                 )
                 for i in range(self.n_interactions)
             ]

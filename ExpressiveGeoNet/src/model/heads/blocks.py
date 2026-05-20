@@ -4,6 +4,7 @@ from torch import nn
 
 from src.model.layers import Dense
 
+
 class GatedEquivariantBlock(nn.Module):
     """
     The gated equivariant block is used to obtain rotationally invariant and equivariant features to be used
@@ -22,7 +23,7 @@ class GatedEquivariantBlock(nn.Module):
     ):
         """
         Initialize the GatedEquivariantBlock.
-        
+
         Args:
             n_sin (int): Input dimension of scalar features.
             n_vin (int): Input dimension of vectorial features.
@@ -40,9 +41,7 @@ class GatedEquivariantBlock(nn.Module):
         self.n_hidden = n_hidden
         self.mix_vectors = Dense(n_vin, 2 * n_vout, activation=None, bias=False)
         self.scalar_net = nn.Sequential(
-            Dense(
-                n_sin + n_vout, n_hidden, activation=activation
-            ),
+            Dense(n_sin + n_vout, n_hidden, activation=activation),
             Dense(n_hidden, n_sout + n_vout, activation=None),
         )
         self.sactivation = sactivation
@@ -50,11 +49,11 @@ class GatedEquivariantBlock(nn.Module):
     def forward(self, scalars: torch.Tensor, vectors: torch.Tensor):
         """
         Forward pass of the GatedEquivariantBlock.
-        
+
         Args:
             scalars (torch.Tensor): Scalar input features.
             vectors (torch.Tensor): Vector input features.
-            
+
         Returns:
             tuple: Tuple containing:
                 - torch.Tensor: Output scalar features.

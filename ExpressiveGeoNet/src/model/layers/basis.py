@@ -38,6 +38,7 @@ class GaussianRBF(nn.Module):
         start (float, optional): Center of the first Gaussian function. Defaults to 0.0.
         trainable (bool, optional): If True, widths and offsets are learnable parameters. Defaults to False.
     """
+
     def __init__(
         self, n_rbf: int, cutoff: float, start: float = 0.0, trainable: bool = False
     ):
@@ -71,6 +72,7 @@ class BesselBasis(nn.Module):
         n_rbf (int, optional): Number of basis functions. Defaults to None.
         trainable (bool, optional): Kept for compatibility, but parameters are not learnable. Defaults to False.
     """
+
     def __init__(self, cutoff=5.0, n_rbf=None, trainable=False):
         super(BesselBasis, self).__init__()
         if n_rbf is None:
@@ -79,10 +81,10 @@ class BesselBasis(nn.Module):
         # compute offset and width of Gaussian functions
         freqs = torch.arange(1, n_rbf + 1) * math.pi / cutoff
         self.register_buffer("freqs", freqs)
-        self.register_buffer('norm1', torch.tensor(1.0))
+        self.register_buffer("norm1", torch.tensor(1.0))
 
     def forward(self, inputs):
-        a = self.freqs[None,  :]
+        a = self.freqs[None, :]
         inputs = inputs[..., None]
         ax = inputs * a
         sinax = torch.sin(ax)
@@ -91,6 +93,8 @@ class BesselBasis(nn.Module):
         y = sinax / norm
 
         return y
+
+
 class ExpNormalSmearing(nn.Module):
     """
     Exponential Normal Smearing for radial basis functions.
@@ -102,6 +106,7 @@ class ExpNormalSmearing(nn.Module):
         n_rbf (int, optional): Number of radial basis functions. Defaults to 50.
         trainable (bool, optional): If True, means and betas are learnable parameters. Defaults to False.
     """
+
     def __init__(self, cutoff=5.0, n_rbf=50, trainable=False):
         super(ExpNormalSmearing, self).__init__()
         if isinstance(cutoff, torch.Tensor):
@@ -156,17 +161,17 @@ def str2basis(input_str):
         ValueError: If the input string is unknown.
     """
     if not isinstance(input_str, str):
-        return input_str # Assume it's already a callable class
+        return input_str  # Assume it's already a callable class
 
     normalized_input = normalize_string(input_str)
 
-    if normalized_input == 'besselbasis':
+    if normalized_input == "besselbasis":
         radial_basis = BesselBasis
-    elif input_str == 'GaussianRBF':
+    elif input_str == "GaussianRBF":
         radial_basis = GaussianRBF
-    elif input_str.lower() == 'expnorm':
+    elif input_str.lower() == "expnorm":
         radial_basis = ExpNormalSmearing
     else:
-        raise ValueError('Unknown radial basis: {}'.format(input_str))
+        raise ValueError("Unknown radial basis: {}".format(input_str))
 
     return radial_basis

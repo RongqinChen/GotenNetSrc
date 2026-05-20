@@ -1,4 +1,4 @@
-"""Hydra entrypoint for standalone ExpressiveGeoNet training runs."""
+"""Hydra entrypoint for standalone ExpGeoNet training runs."""
 
 from __future__ import annotations
 

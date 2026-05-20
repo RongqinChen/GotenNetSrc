@@ -44,7 +44,9 @@ class MD22(InMemoryDataset):
     available_molecules = list(molecule_repos.keys())
     _required_columns = ("atomic_numbers", "positions", "energy", "atomic_forces")
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, label=None):
+    def __init__(
+        self, root, transform=None, pre_transform=None, pre_filter=None, label=None
+    ):
         self.molecules = parse_csv_selection(
             label,
             available=self.available_molecules,
@@ -76,16 +78,23 @@ class MD22(InMemoryDataset):
     def _fetch_manifest(cls, repo_id):
         """Fetch Hugging Face dataset metadata and list parquet shards."""
         url = f"https://huggingface.co/api/datasets/{repo_id}"
-        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=DOWNLOAD_TIMEOUT)
+        resp = requests.get(
+            url, headers={"User-Agent": USER_AGENT}, timeout=DOWNLOAD_TIMEOUT
+        )
         resp.raise_for_status()
         meta = resp.json()
         parquet_files = sorted(
-            s["rfilename"] for s in meta.get("siblings", [])
+            s["rfilename"]
+            for s in meta.get("siblings", [])
             if s["rfilename"].startswith("co/") and s["rfilename"].endswith(".parquet")
         )
         if not parquet_files:
             raise RuntimeError(f"No parquet shards found for {repo_id}.")
-        return {"repo_id": repo_id, "revision": meta.get("sha", "main"), "parquet_files": parquet_files}
+        return {
+            "repo_id": repo_id,
+            "revision": meta.get("sha", "main"),
+            "parquet_files": parquet_files,
+        }
 
     def download(self):
         """Download MD22 parquet shards from Hugging Face."""
@@ -106,7 +115,8 @@ class MD22(InMemoryDataset):
                     f"/resolve/{manifest['revision']}/{rel_path}"
                 )
                 stream_download(
-                    url, local,
+                    url,
+                    local,
                     description=f"{mol}:{osp.basename(rel_path)}",
                     headers={"User-Agent": USER_AGENT},
                     timeout=DOWNLOAD_TIMEOUT,
@@ -133,9 +143,16 @@ class MD22(InMemoryDataset):
             mol_dir = osp.join(self.raw_dir, "md22", mol)
             for rel_path in manifest["parquet_files"]:
                 pf = pq.ParquetFile(osp.join(mol_dir, rel_path))
-                for batch in pf.iter_batches(batch_size=_PROCESS_BATCH, columns=list(self._required_columns)):
+                for batch in pf.iter_batches(
+                    batch_size=_PROCESS_BATCH, columns=list(self._required_columns)
+                ):
                     rows = batch.to_pydict()
-                    for z, pos, e, f in zip(rows["atomic_numbers"], rows["positions"], rows["energy"], rows["atomic_forces"]):
+                    for z, pos, e, f in zip(
+                        rows["atomic_numbers"],
+                        rows["positions"],
+                        rows["energy"],
+                        rows["atomic_forces"],
+                    ):
                         data = Data(
                             z=torch.tensor(z, dtype=torch.long),
                             pos=torch.tensor(pos, dtype=torch.float32),

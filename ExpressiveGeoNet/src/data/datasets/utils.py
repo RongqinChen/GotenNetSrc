@@ -34,7 +34,9 @@ def parse_csv_selection(
 ) -> list[T]:
     """Parse a comma-separated selection string into validated unique values."""
     if value is None:
-        raise ValueError(f"Pass {field_name!r}; available values: {', '.join(map(str, available))}")
+        raise ValueError(
+            f"Pass {field_name!r}; available values: {', '.join(map(str, available))}"
+        )
 
     raw_value = value.strip()
     if not raw_value:

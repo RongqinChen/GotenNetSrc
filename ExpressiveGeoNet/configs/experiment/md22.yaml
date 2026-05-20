@@ -42,7 +42,6 @@ model:
   output:
     n_hidden: 256
 
-
 trainer:
   max_epochs: 3000
   inference_mode: False
@@ -54,6 +53,6 @@ callbacks:
     patience: 3000 
   model_checkpoint:
     monitor: "validation/val_loss"
-project: "ExpressiveGeoNet_md22"
+project: "ExpGeoNet_md22"
 
 task: "MD22"

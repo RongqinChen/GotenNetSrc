@@ -46,7 +46,9 @@ def _phase_metric_map(instance, phase: str):
         "test": (instance.test_meta, instance.test_metrics),
     }
     if phase not in registry:
-        raise NotImplementedError(f"Unknown phase {phase!r}. Expected one of {VALID_PHASES}")
+        raise NotImplementedError(
+            f"Unknown phase {phase!r}. Expected one of {VALID_PHASES}"
+        )
     return registry[phase]
 
 
@@ -68,7 +70,7 @@ class GotenModel(pl.LightningModule):
         lr_decay: float = 0.5,
         lr_patience: int = 100,
         lr_minlr: float = 1e-6,
-        lr_monitor: str = "validation/ema_val_loss",
+        lr_monitor: str = "validation/val_loss",
         weight_decay: float = 0.01,
         cutoff: float = 5.0,
         dataset_meta: Optional[dict] = None,
@@ -125,7 +127,9 @@ class GotenModel(pl.LightningModule):
         else:
             self.task_handler = None
 
-        self.evaluator = self.task_handler.get_evaluator() if self.task_handler else None
+        self.evaluator = (
+            self.task_handler.get_evaluator() if self.task_handler else None
+        )
 
         # ── Metrics ───────────────────────────────────────────────────
         # Separate metric modules for train/validation/test (train is empty by default).
@@ -213,7 +217,9 @@ class GotenModel(pl.LightningModule):
         """Return loss configurations from the task handler."""
         if self.task_handler is not None:
             return self.task_handler.get_losses()
-        raise NotImplementedError("No task handler configured — cannot retrieve losses.")
+        raise NotImplementedError(
+            "No task handler configured — cannot retrieve losses."
+        )
 
     def get_metrics(self) -> list:
         """Return metric configurations from the task handler."""
@@ -247,24 +253,26 @@ class GotenModel(pl.LightningModule):
         return result
 
     def _forward_pipeline(self, batch) -> dict:
-        """Run the full forward pass: enable grads → encode → output heads.
-
-        Callers are responsible for managing ``torch.set_grad_enabled`` around this call.
-        """
+        """Run the full forward pass for the current autograd context."""
         self._enable_grads_on_positions(batch)
         self._encode(batch)
         return self._apply_output_heads(batch)
 
+    def _needs_grad_for_phase(self, phase: str) -> bool:
+        """Return whether *phase* requires autograd-enabled execution."""
+        return phase == "train" or self.requires_force_derivatives
+
+    def _run_phase(self, batch, phase: str) -> dict:
+        """Run a forward pass using the appropriate grad mode for *phase*."""
+        with torch.set_grad_enabled(self._needs_grad_for_phase(phase)):
+            return self._forward_pipeline(batch)
+
     def forward(self, batch) -> dict:
-        """Full forward pass with gradient tracking temporarily enabled."""
-        torch.set_grad_enabled(True)
-        result = self._forward_pipeline(batch)
-        torch.set_grad_enabled(False)
-        return result
+        """Full forward pass that respects the caller's current grad mode."""
+        return self._forward_pipeline(batch)
 
     def encode(self, batch) -> Any:
-        """Encode *batch* only (no output heads)."""
-        torch.set_grad_enabled(True)
+        """Encode *batch* only (no output heads), respecting caller grad mode."""
         self._enable_grads_on_positions(batch)
         return self._encode(batch)
 
@@ -272,7 +280,7 @@ class GotenModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx: int) -> torch.Tensor:  # type: ignore[override]
         """Single training step: forward pass → loss → return scalar loss."""
-        result = self._forward_pipeline(batch)
+        result = self._run_phase(batch, "train")
         return self.calculate_loss(batch, result, name="train")
 
     def validation_step(  # type: ignore[override]
@@ -282,9 +290,7 @@ class GotenModel(pl.LightningModule):
         dataloader_idx: int = 0,
     ) -> dict:
         """Single validation step: forward pass → loss → metrics → evaluation outputs."""
-        torch.set_grad_enabled(True)
-        result = self._forward_pipeline(batch)
-        torch.set_grad_enabled(False)
+        result = self._run_phase(batch, "validation")
 
         # Loss
         val_loss = self.calculate_loss(batch, result, name="validation").detach().item()
@@ -316,9 +322,7 @@ class GotenModel(pl.LightningModule):
         dataloader_idx: int = 0,
     ) -> dict:
         """Single test step: forward pass → loss → metrics → evaluation outputs."""
-        torch.set_grad_enabled(True)
-        result = self._forward_pipeline(batch)
-        torch.set_grad_enabled(False)
+        result = self._run_phase(batch, "test")
 
         self.calculate_loss(batch, result).detach().item()
         self.log_metrics(batch, result, "test")
@@ -346,8 +350,11 @@ class GotenModel(pl.LightningModule):
             # Compute the metric value
             if "target" in meta:
                 # Supervised metric: compare predictions to ground-truth targets
-                predictions, targets = self.task_handler.process_outputs(
-                    batch, result, meta, idx,
+                predictions, targets = self.task_handler.process_metric_outputs(
+                    batch,
+                    result,
+                    meta,
+                    idx,
                 )
                 if meta["prediction"] == "force":
                     predictions = predictions[:, :]
@@ -373,13 +380,20 @@ class GotenModel(pl.LightningModule):
 
     # ── Loss ──────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _ema_total_log_key(phase_name: str) -> str:
+        """Return the aggregate EMA log key for a given phase."""
+        if phase_name == "validation":
+            return "validation/ema_val_loss"
+        return f"{phase_name}/ema_loss"
+
     def calculate_loss(
         self,
         batch,
         result: dict,
         name: Optional[str] = None,
     ) -> torch.Tensor:
-        """Compute the total (possibly EMA-smoothed) loss from all loss components.
+        """Compute the total raw loss and optionally log detached EMA diagnostics.
 
         Parameters
         ----------
@@ -393,14 +407,16 @@ class GotenModel(pl.LightningModule):
         Returns
         -------
         torch.Tensor
-            Aggregated loss (scalar).
+            Raw aggregated loss (scalar) used for optimization.
         """
         device = self.device
         dtype = self.dtype
 
         total_loss = torch.tensor(0.0, device=device, dtype=dtype)
-        original_total = (
-            torch.tensor(0.0, device=device, dtype=dtype) if self.use_ema else None
+        ema_total = (
+            torch.tensor(0.0, device=device, dtype=dtype)
+            if self.use_ema and name is not None
+            else None
         )
 
         for loss_idx, loss_cfg in enumerate(self.loss_meta):
@@ -408,42 +424,54 @@ class GotenModel(pl.LightningModule):
 
             # 1. Compute individual loss
             if "target" in loss_cfg:
-                predictions, targets = self.task_handler.process_outputs(
-                    batch, result, loss_cfg, loss_idx,
+                predictions, targets = self.task_handler.process_loss_outputs(
+                    batch,
+                    result,
+                    loss_cfg,
+                    loss_idx,
                 )
-                individual_loss = loss_fn(predictions, targets)
+                raw_loss = loss_fn(predictions, targets)
             else:
-                individual_loss = loss_fn(result[loss_cfg["prediction"]])
+                raw_loss = loss_fn(result[loss_cfg["prediction"]])
 
-            # Track original (pre-EMA) loss if EMA is enabled globally
-            if self.use_ema:
-                original_total = original_total + loss_cfg["loss_weight"] * individual_loss  # type: ignore[operator]
+            # 2. Accumulate the raw loss for optimization.
+            total_loss = total_loss + loss_cfg["loss_weight"] * raw_loss
 
-            # 2. Apply per-loss EMA smoothing if configured
-            individual_loss = self._maybe_apply_ema_smoothing(
-                loss_cfg, individual_loss, name,
-            )
+            # 3. Update detached EMA diagnostics strictly for logging.
+            ema_loss = None
+            if ema_total is not None:
+                ema_loss = self._update_ema_and_get_smoothed(
+                    loss_cfg,
+                    raw_loss,
+                    name,
+                )
+                ema_total = ema_total + loss_cfg["loss_weight"] * ema_loss
 
-            # 3. Log the individual loss component
+            # 4. Log the individual loss component(s).
             if name is not None:
                 log_key = f"{name}/{loss_cfg['prediction']}_loss"
                 self.log(
                     log_key,
-                    individual_loss,
+                    raw_loss,
                     on_step=(name == "train"),
                     on_epoch=True,
                     prog_bar=(name == "train"),
                     batch_size=self._get_num_graphs(batch),
                 )
+                if ema_loss is not None:
+                    self.log(
+                        f"{name}/{loss_cfg['prediction']}_ema_loss",
+                        ema_loss,
+                        on_step=(name == "train"),
+                        on_epoch=True,
+                        prog_bar=False,
+                        batch_size=self._get_num_graphs(batch),
+                    )
 
-            # 4. Accumulate weighted loss
-            total_loss = total_loss + loss_cfg["loss_weight"] * individual_loss
-
-        # Log the original (un-smoothed) total if EMA is active
-        if self.use_ema and name is not None:
+        if ema_total is not None:
             self.log(
-                f"{name}/val_loss_og",
-                original_total,
+                self._ema_total_log_key(name),
+                ema_total,
                 on_step=(name == "train"),
                 on_epoch=True,
                 batch_size=self._get_num_graphs(batch),
@@ -451,23 +479,22 @@ class GotenModel(pl.LightningModule):
 
         return total_loss
 
-    def _maybe_apply_ema_smoothing(
+    def _update_ema_and_get_smoothed(
         self,
         loss_cfg: dict,
         current_loss: torch.Tensor,
         phase_name: Optional[str],
     ) -> torch.Tensor:
-        """Apply exponential moving average smoothing to *current_loss* if configured.
+        """Update and return detached EMA-smoothed diagnostics for *current_loss*.
 
-        If the loss configuration has an ``ema_rate`` and the current *phase_name*
-        is one of the configured ``ema_stages``, the returned value is the EMA-smoothed
-        version of the loss. Otherwise *current_loss* is returned unchanged.
+        EMA is used only for logging/monitoring and never changes the raw
+        optimization objective returned by :meth:`calculate_loss`.
         """
         ema_rate = loss_cfg.get("ema_rate")
         ema_stages = loss_cfg.get("ema_stages", [])
-        # Only smooth if all criteria are met
         if (
-            ema_rate is None
+            not self.use_ema
+            or ema_rate is None
             or phase_name is None
             or phase_name not in ema_stages
             or not (0.0 < ema_rate < 1.0)
@@ -478,10 +505,8 @@ class GotenModel(pl.LightningModule):
         smoothed = self.ema[ema_key]
 
         if smoothed is None:
-            # First time: store raw loss as the initial EMA value
             self.ema[ema_key] = current_loss.detach()
         else:
-            # EMA update: ema = rate * new + (1 - rate) * old
             smoothed = ema_rate * current_loss + (1.0 - ema_rate) * smoothed
             self.ema[ema_key] = smoothed.detach()
             current_loss = smoothed

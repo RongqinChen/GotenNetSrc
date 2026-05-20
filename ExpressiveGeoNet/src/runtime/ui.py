@@ -87,6 +87,7 @@ def print_config(
 
     rich.print(tree)
 
+
 def get_metric_value(
     metric_dict: dict[str, Any],
     metric_name: str | None,

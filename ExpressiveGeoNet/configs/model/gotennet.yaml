@@ -26,6 +26,10 @@ representation:
   max_z: 100
   weight_init: "xavier_uniform"
   bias_init: "zeros"
+  layernorm: ""
+  steerable_norm: ""
+  residual_scale: 1.0
+  edge_residual_scale: 1.0
   num_heads: 8
   attn_dropout: 0.1
   edge_updates: True
@@ -38,6 +42,3 @@ representation:
   sep_dir: True
   sep_tensor: True
   edge_ln: ""
-
-#task_config:
-#  name: "Test"

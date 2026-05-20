@@ -50,6 +50,6 @@ callbacks:
     patience: 3000 
   model_checkpoint:
     monitor: "validation/val_loss"
-project: "ExpressiveGeoNet_rmd17"
+project: "ExpGeoNet_rmd17"
 
 task: "rMD17"

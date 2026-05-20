@@ -7,4 +7,4 @@ model:
   representation:
     n_interactions: 4
 
-project: "ExpressiveGeoNet_qm9_small"
+project: "ExpGeoNet_qm9_small"

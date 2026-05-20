@@ -15,4 +15,4 @@ model:
   output:
     n_hidden: 384
 
-project: "ExpressiveGeoNet_md22_wide"
+project: "ExpGeoNet_md22_wide"

@@ -34,19 +34,48 @@ class Task:
         self.representation = representation
         self.label_key = label_key
         self.dataset_meta = dataset_meta
-        self.cast_to_float64 = True
+        # Keep optimization losses in the model's native dtype by default, but
+        # allow opting into fp64 for experiments that truly need it.
+        self.cast_to_float64 = self.config.get("cast_to_float64", False)
+        # Metrics are cheap enough to normalize to fp32 for more consistent
+        # logging, especially if a run later enables reduced-precision compute.
+        self.cast_metrics_to_float32 = self.config.get(
+            "cast_metrics_to_float32", True
+        )
 
-    def process_outputs(self, batch, result, metric_meta, metric_idx):
-        """Reshape predictions to match targets; optionally cast to float64."""
+    def _select_outputs(self, batch, result, metric_meta, metric_idx):
+        """Select and reshape predictions + targets for supervised comparisons."""
         pred = result[metric_meta["prediction"]]
         targets = batch[metric_meta["target"]]
         pred = pred.reshape(targets.shape)
+        return pred, targets
+
+    def process_loss_outputs(self, batch, result, metric_meta, metric_idx):
+        """Prepare supervised tensors for loss computation."""
+        pred, targets = self._select_outputs(batch, result, metric_meta, metric_idx)
 
         if self.cast_to_float64:
             targets = targets.type(torch.float64)
             pred = pred.type(torch.float64)
 
         return pred, targets
+
+    def process_metric_outputs(self, batch, result, metric_meta, metric_idx):
+        """Prepare supervised tensors for metric computation."""
+        pred, targets = self._select_outputs(batch, result, metric_meta, metric_idx)
+
+        if self.cast_to_float64:
+            targets = targets.type(torch.float64)
+            pred = pred.type(torch.float64)
+        elif self.cast_metrics_to_float32:
+            targets = targets.float()
+            pred = pred.float()
+
+        return pred, targets
+
+    def process_outputs(self, batch, result, metric_meta, metric_idx):
+        """Backward-compatible alias for metric preprocessing."""
+        return self.process_metric_outputs(batch, result, metric_meta, metric_idx)
 
     def get_metric_names(self, metric_meta, metric_idx=0):
         return f"{metric_meta['prediction']}"

@@ -70,9 +70,19 @@ class Molecule3D(InMemoryDataset):
     available_properties = PROPERTY_LABELS
     available_configs = ["Molecule3D_random_split", "Molecule3D_scaffold_split"]
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, label=None, split_config="Molecule3D_random_split"):
+    def __init__(
+        self,
+        root,
+        transform=None,
+        pre_transform=None,
+        pre_filter=None,
+        label=None,
+        split_config="Molecule3D_random_split",
+    ):
         if label is None:
-            raise ValueError(f"Pass a property via 'label'. Available: {', '.join(self.available_properties)}")
+            raise ValueError(
+                f"Pass a property via 'label'. Available: {', '.join(self.available_properties)}"
+            )
         if label not in self.available_properties:
             raise ValueError(f"Unknown property '{label}'.")
         if split_config not in self.available_configs:
@@ -91,7 +101,7 @@ class Molecule3D(InMemoryDataset):
         normalized = rel_path.replace("\\", "/").lstrip("./")
         prefix = f"{split_config}/"
         if normalized.startswith(prefix):
-            return normalized[len(prefix):]
+            return normalized[len(prefix) :]
         return normalized
 
     def _config_dir(self) -> str:
@@ -122,7 +132,9 @@ class Molecule3D(InMemoryDataset):
         """Load cached train/val/test index lists from the processed split file."""
         path = self.processed_paths[1]
         if not osp.exists(path):
-            raise RuntimeError("Dataset must be processed before splits can be retrieved.")
+            raise RuntimeError(
+                "Dataset must be processed before splits can be retrieved."
+            )
         with open(path) as f:
             s = json.load(f)
         return s["idx_train"], s["idx_val"], s["idx_test"]
@@ -137,13 +149,17 @@ class Molecule3D(InMemoryDataset):
     def _fetch_manifest(cls):
         """Fetch Hugging Face dataset metadata for all parquet shards."""
         url = "https://huggingface.co/api/datasets/maomlab/Molecule3D"
-        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=DOWNLOAD_TIMEOUT)
+        resp = requests.get(
+            url, headers={"User-Agent": USER_AGENT}, timeout=DOWNLOAD_TIMEOUT
+        )
         resp.raise_for_status()
         meta = resp.json()
         return {
             "revision": meta.get("sha", "main"),
             "parquet_files": sorted(
-                s["rfilename"] for s in meta.get("siblings", []) if s["rfilename"].endswith(".parquet")
+                s["rfilename"]
+                for s in meta.get("siblings", [])
+                if s["rfilename"].endswith(".parquet")
             ),
         }
 
@@ -157,7 +173,9 @@ class Molecule3D(InMemoryDataset):
 
         manifest = self._fetch_manifest()
         prefix = f"{self.split_config}/"
-        remote_files = sorted(f for f in manifest["parquet_files"] if f.startswith(prefix))
+        remote_files = sorted(
+            f for f in manifest["parquet_files"] if f.startswith(prefix)
+        )
         if not remote_files:
             raise RuntimeError(f"No parquet files for config '{self.split_config}'.")
 
@@ -173,7 +191,8 @@ class Molecule3D(InMemoryDataset):
 
             url = f"https://huggingface.co/datasets/maomlab/Molecule3D/resolve/{manifest['revision']}/{remote_rel}"
             stream_download(
-                url, local,
+                url,
+                local,
                 description=osp.basename(rel),
                 headers={"User-Agent": USER_AGENT},
                 timeout=DOWNLOAD_TIMEOUT,
@@ -181,7 +200,11 @@ class Molecule3D(InMemoryDataset):
             )
 
         with open(manifest_path, "w") as f:
-            json.dump({"revision": manifest["revision"], "parquet_files": config_files}, f, indent=2)
+            json.dump(
+                {"revision": manifest["revision"], "parquet_files": config_files},
+                f,
+                indent=2,
+            )
 
     # ── SDF parsing ─────────────────────────────────────────────────────
 
@@ -210,7 +233,9 @@ class Molecule3D(InMemoryDataset):
 
             conf = mol.GetConformer()
             return (
-                torch.tensor([a.GetAtomicNum() for a in mol.GetAtoms()], dtype=torch.long),
+                torch.tensor(
+                    [a.GetAtomicNum() for a in mol.GetAtoms()], dtype=torch.long
+                ),
                 torch.tensor(conf.GetPositions(), dtype=torch.float32),
             )
         except Exception:
@@ -254,7 +279,10 @@ class Molecule3D(InMemoryDataset):
                 pf = pq.ParquetFile(osp.join(cfg_dir, rel))
                 for batch in pf.iter_batches(batch_size=_PROCESS_BATCH):
                     rows = batch.to_pydict()
-                    for sdf_str, val in zip(rows["sdf"], rows.get(self._target_column, [None] * len(rows["sdf"]))):
+                    for sdf_str, val in zip(
+                        rows["sdf"],
+                        rows.get(self._target_column, [None] * len(rows["sdf"])),
+                    ):
                         if val is None:
                             continue
                         z, pos = self._parse_sdf(sdf_str)

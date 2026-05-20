@@ -22,11 +22,21 @@ def clone_config(cfg: DictConfig) -> DictConfig:
     return OmegaConf.create(OmegaConf.to_container(cfg, resolve=False))
 
 
-def configure_matmul_precision(cfg: DictConfig, *, default: str) -> None:
-    """Apply matmul precision from config or a provided default."""
+def configure_matmul_precision(
+    cfg: DictConfig, *, default: str, default_allow_tf32: bool = False
+) -> None:
+    """Apply matmul precision and optional TF32 acceleration from config."""
     precision = cfg.get("matmul_precision", default)
+    allow_tf32 = bool(cfg.get("allow_tf32", default_allow_tf32))
     torch.set_float32_matmul_precision(precision)
-    log.info("Running with %s precision.", precision)
+    if hasattr(torch.backends, "cuda"):
+        if hasattr(torch.backends.cuda, "matmul"):
+            torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    if hasattr(torch.backends, "cudnn"):
+        torch.backends.cudnn.allow_tf32 = allow_tf32
+    log.info(
+        "Running with %s precision (allow_tf32=%s).", precision, allow_tf32
+    )
 
 
 def seed_from_config(cfg: DictConfig) -> None:
@@ -68,7 +78,9 @@ def resolve_experiment_name(cfg: DictConfig) -> str:
     return experiment_name
 
 
-def populate_run_metadata(cfg: DictConfig, datamodule: LightningDataModule) -> DictConfig:
+def populate_run_metadata(
+    cfg: DictConfig, datamodule: LightningDataModule
+) -> DictConfig:
     """Populate derived runtime metadata without mutating the caller config."""
     cfg.label, cfg.label_str = resolve_label(datamodule, cfg.label)
     cfg.experiment_name = resolve_experiment_name(cfg)
@@ -105,7 +117,11 @@ def apply_mps_fallback(trainer_cfg: DictConfig) -> DictConfig:
     mps_available = bool(mps_backend and mps_backend.is_available())
     accelerator = trainer_cfg.get("accelerator", "auto")
 
-    if mps_available and not torch.cuda.is_available() and accelerator in {"auto", "gpu", "mps"}:
+    if (
+        mps_available
+        and not torch.cuda.is_available()
+        and accelerator in {"auto", "gpu", "mps"}
+    ):
         log.warning(
             "MPS is available, but torch_cluster.radius_graph requires CPU or CUDA. "
             "Falling back to CPU execution."

@@ -1,7 +1,17 @@
 """Layer primitives grouped by activation, basis, graph, and dense helpers."""
 
-from src.model.layers.activations import ShiftedSoftplus, Swish, shifted_softplus, str2act
-from src.model.layers.basis import BesselBasis, ExpNormalSmearing, GaussianRBF, str2basis
+from src.model.layers.activations import (
+    ShiftedSoftplus,
+    Swish,
+    shifted_softplus,
+    str2act,
+)
+from src.model.layers.basis import (
+    BesselBasis,
+    ExpNormalSmearing,
+    GaussianRBF,
+    str2basis,
+)
 from src.model.layers.common import (
     Dense,
     GetItem,

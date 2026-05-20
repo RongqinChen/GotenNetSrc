@@ -16,6 +16,8 @@ from src.model.layers import (
 )
 
 log = get_logger(__name__)
+
+
 class AtomwiseV3(nn.Module):
     """
     Atomwise prediction module V3 for predicting atomic properties.
@@ -28,7 +30,7 @@ class AtomwiseV3(nn.Module):
         aggregation_mode: Optional[str] = "sum",
         n_layers: int = 2,
         n_hidden: Optional[int] = None,
-        activation = shifted_softplus,
+        activation=shifted_softplus,
         property: str = "y",
         contributions: Optional[str] = None,
         derivative: Optional[str] = None,
@@ -43,7 +45,7 @@ class AtomwiseV3(nn.Module):
     ):
         """
         Initialize the AtomwiseV3 module.
-        
+
         Args:
             n_in (int): Input dimension of atomwise features.
             n_out (int): Output dimension of target property.
@@ -74,7 +76,6 @@ class AtomwiseV3(nn.Module):
         self.negative_dr = negative_dr
         self.standardize = standardize
 
-
         mean = 0.0 if mean is None else mean
         stddev = 1.0 if stddev is None else stddev
         self.mean = mean
@@ -84,9 +85,7 @@ class AtomwiseV3(nn.Module):
             activation = str2act(activation)
 
         if atomref is not None:
-            self.atomref = nn.Embedding.from_pretrained(
-                atomref.type(torch.float32)
-            )
+            self.atomref = nn.Embedding.from_pretrained(atomref.type(torch.float32))
         else:
             self.atomref = None
 
@@ -106,13 +105,25 @@ class AtomwiseV3(nn.Module):
 
         self.aggregation_mode = aggregation_mode
 
+    def _derivative_graph_flags(self) -> tuple[bool, bool]:
+        """Return ``(create_graph, retain_graph)`` for derivative predictions.
+
+        Training force losses need a higher-order graph so gradients can flow
+        through predicted forces back to model parameters. During validation,
+        test, and inference we only need first-order force values, so we avoid
+        building or retaining that extra graph.
+        """
+        create_graph = self.create_graph and self.training and torch.is_grad_enabled()
+        retain_graph = create_graph
+        return create_graph, retain_graph
+
     def forward(self, inputs):
         """
         Predicts atomwise property.
-        
+
         Args:
             inputs: Input data containing atomic representations.
-            
+
         Returns:
             dict: Dictionary with predicted properties.
         """
@@ -126,7 +137,9 @@ class AtomwiseV3(nn.Module):
             yi = yi + y0
 
         if self.aggregation_mode is not None:
-            y = torch_scatter.scatter(yi, inputs.batch, dim=0, reduce=self.aggregation_mode)
+            y = torch_scatter.scatter(
+                yi, inputs.batch, dim=0, reduce=self.aggregation_mode
+            )
         else:
             y = yi
 
@@ -139,12 +152,13 @@ class AtomwiseV3(nn.Module):
             result[self.contributions] = yi
         if self.derivative:
             sign = -1.0 if self.negative_dr else 1.0
+            create_graph, retain_graph = self._derivative_graph_flags()
             dy = grad(
                 outputs=result[self.property],
                 inputs=[inputs.pos],
                 grad_outputs=torch.ones_like(result[self.property]),
-                create_graph=self.create_graph,
-                retain_graph=True
+                create_graph=create_graph,
+                retain_graph=retain_graph,
             )[0]
 
             dy = sign * dy
@@ -156,7 +170,7 @@ class Atomwise(nn.Module):
     """
     Atomwise prediction module for predicting atomic properties.
     """
-    
+
     def __init__(
         self,
         n_in: int,
@@ -164,7 +178,7 @@ class Atomwise(nn.Module):
         aggregation_mode: Optional[str] = "sum",
         n_layers: int = 2,
         n_hidden: Optional[int] = None,
-        activation = shifted_softplus,
+        activation=shifted_softplus,
         property: str = "y",
         contributions: Optional[str] = None,
         derivative: Optional[str] = None,
@@ -179,7 +193,7 @@ class Atomwise(nn.Module):
     ):
         """
         Initialize the Atomwise module.
-        
+
         Args:
             n_in (int): Input dimension of atomwise features.
             n_out (int): Output dimension of target property.
@@ -209,18 +223,30 @@ class Atomwise(nn.Module):
         self.derivative = derivative
         self.negative_dr = negative_dr
         self.standardize = standardize
-        
-        mean = torch.FloatTensor([0.0]) if mean is None else mean
-        stddev = torch.FloatTensor([1.0]) if stddev is None else stddev
+
+        if mean is None:
+            mean = torch.tensor([0.0], dtype=torch.float32)
+        elif isinstance(mean, float):
+            mean = torch.tensor([mean], dtype=torch.float32)
+        else:
+            mean = mean.detach().clone().float()
+
+        if stddev is None:
+            stddev = torch.tensor([1.0], dtype=torch.float32)
+        elif isinstance(stddev, float):
+            stddev = torch.tensor([stddev], dtype=torch.float32)
+        else:
+            stddev = stddev.detach().clone().float()
+
+        self.register_buffer("mean", mean)
+        self.register_buffer("stddev", stddev)
 
         if type(activation) is str:
             activation = str2act(activation)
 
         # initialize single atom energies
         if atomref is not None:
-            self.atomref = nn.Embedding.from_pretrained(
-                atomref.type(torch.float32)
-            )
+            self.atomref = nn.Embedding.from_pretrained(atomref.type(torch.float32))
         else:
             self.atomref = None
 
@@ -234,28 +260,38 @@ class Atomwise(nn.Module):
         else:
             self.out_net = outnet
 
-        # build standardization layer
-        if self.standardize and (mean is not None and stddev is not None):
-            log.info(f"Using standardization with mean {mean} and stddev {stddev}")
-            self.standardize = ScaleShift(mean, stddev)
-        else:
-            self.standardize = nn.Identity()
+        if self.standardize:
+            log.info(
+                "Using graph-level standardization with mean %s and stddev %s",
+                self.mean,
+                self.stddev,
+            )
 
         self.aggregation_mode = aggregation_mode
+
+    def _derivative_graph_flags(self) -> tuple[bool, bool]:
+        """Return ``(create_graph, retain_graph)`` for derivative predictions.
+
+        Keep higher-order graphs only during training, where force losses need
+        to backpropagate through predicted derivatives.
+        """
+        create_graph = self.create_graph and self.training and torch.is_grad_enabled()
+        retain_graph = create_graph
+        return create_graph, retain_graph
 
     def forward(self, inputs):
         """
         Predicts atomwise property.
-        
+
         Args:
             inputs: Input data containing atomic representations.
-            
+
         Returns:
             dict: Dictionary with predicted properties.
         """
         atomic_numbers = inputs.z
         result = {}
-        
+
         if self.equivariant:
             l0 = inputs.representation
             l1 = inputs.vector_representation
@@ -267,17 +303,24 @@ class Atomwise(nn.Module):
             yi = l0
         else:
             yi = self.out_net(inputs)
-        yi = self.standardize(yi)
+
+        if self.standardize:
+            yi = yi * self.stddev
 
         if self.atomref is not None:
             y0 = self.atomref(atomic_numbers)
             yi = yi + y0
 
-
         if self.aggregation_mode is not None:
-            y = torch_scatter.scatter(yi, inputs.batch, dim=0, reduce=self.aggregation_mode)
+            y = torch_scatter.scatter(
+                yi, inputs.batch, dim=0, reduce=self.aggregation_mode
+            )
+            if self.standardize:
+                # Dataset statistics are graph-level, so only shift once after
+                # aggregating atomic contributions into a graph prediction.
+                y = y + self.mean
         else:
-            y = yi
+            y = yi + self.mean if self.standardize else yi
 
         # collect results
         result[self.property] = y
@@ -287,12 +330,13 @@ class Atomwise(nn.Module):
 
         if self.derivative:
             sign = -1.0 if self.negative_dr else 1.0
+            create_graph, retain_graph = self._derivative_graph_flags()
             dy = grad(
                 outputs=result[self.property],
                 inputs=[inputs.pos],
                 grad_outputs=torch.ones_like(result[self.property]),
-                create_graph=self.create_graph,
-                retain_graph=True
+                create_graph=create_graph,
+                retain_graph=retain_graph,
             )[0]
 
             result[self.derivative] = sign * dy

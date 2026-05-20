@@ -1,8 +1,8 @@
-# ExpressiveGeoNet — Systematic Codebase Summary
+# ExpGeoNet — Systematic Codebase Summary
 
 ## 1. Project Overview
 
-**ExpressiveGeoNet** is a reproduction/reconstruction of **GotenNet (Geometric Tensor Network)**, a novel E(3)-equivariant graph neural network architecture for molecular property prediction. The project is organized as a "script-first" layout — you can enter the project root and run training directly without installing a package.
+**ExpGeoNet** is a reproduction/reconstruction of **GotenNet (Geometric Tensor Network)**, a novel E(3)-equivariant graph neural network architecture for molecular property prediction. The project is organized as a "script-first" layout — you can enter the project root and run training directly without installing a package.
 
 - **License:** MIT (Copyright 2025 Sarp Aykent)
 - **Paper reference:** `docs/research/13629_GotenNet_Rethinking_Effi.pdf`
@@ -13,7 +13,7 @@
 ## 2. Project Layout
 
 ```
-ExpressiveGeoNet/
+ExpGeoNet/
 ├── train.py                        # Hydra training entrypoint
 ├── test.py                         # Hydra evaluation entrypoint
 ├── requirements.txt                # Dependencies

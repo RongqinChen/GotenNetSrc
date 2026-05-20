@@ -7,6 +7,8 @@ from torch import nn as nn
 from src.common.logging import get_logger
 
 log = get_logger(__name__)
+
+
 class PolynomialCutoff(nn.Module):
     """
     Polynomial cutoff function, as proposed in DimeNet.
@@ -18,17 +20,14 @@ class PolynomialCutoff(nn.Module):
         cutoff (float): Cutoff radius.
         p (int, optional): Exponent for the polynomial decay. Defaults to 6.
     """
+
     def __init__(self, cutoff, p: int = 6):
         super(PolynomialCutoff, self).__init__()
         self.cutoff = cutoff
         self.p = p
 
     @staticmethod
-    def polynomial_cutoff(
-        r: Tensor,
-        rcut: float,
-        p: float = 6.0
-    ) -> Tensor:
+    def polynomial_cutoff(r: Tensor, rcut: float, p: float = 6.0) -> Tensor:
         """
         Polynomial cutoff, as proposed in DimeNet: https://arxiv.org/abs/2003.03123
         """
@@ -50,6 +49,7 @@ class PolynomialCutoff(nn.Module):
     def __repr__(self):
         return f"{self.__class__.__name__}(cutoff={self.cutoff}, p={self.p})"
 
+
 class CosineCutoff(nn.Module):
     """
     Cosine cutoff function.
@@ -59,6 +59,7 @@ class CosineCutoff(nn.Module):
     Args:
         cutoff (float): Cutoff radius.
     """
+
     def __init__(self, cutoff):
         super(CosineCutoff, self).__init__()
 
@@ -73,7 +74,7 @@ class CosineCutoff(nn.Module):
 
 
 @torch.jit.script
-def safe_norm(x: Tensor, dim:int=-2, eps:float=1e-8, keepdim: bool=False):
+def safe_norm(x: Tensor, dim: int = -2, eps: float = 1e-8, keepdim: bool = False):
     """
     Compute the norm of a tensor safely, avoiding division by zero.
 
@@ -86,4 +87,4 @@ def safe_norm(x: Tensor, dim:int=-2, eps:float=1e-8, keepdim: bool=False):
     Returns:
         Tensor: The norm of the input tensor.
     """
-    return torch.sqrt(torch.sum(x ** 2, dim=dim, keepdim=keepdim)) + eps
+    return torch.sqrt(torch.sum(x**2, dim=dim, keepdim=keepdim)) + eps

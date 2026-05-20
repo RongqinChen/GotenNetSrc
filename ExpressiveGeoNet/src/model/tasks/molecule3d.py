@@ -25,16 +25,13 @@ class Molecule3DTask(Task):
         self.num_classes = 1
         self.task_loss = self.task_config.get("task_loss", "L1Loss")
 
-    def process_outputs(self, batch, result, metric_meta, metric_idx):
+    def _select_outputs(self, batch, result, metric_meta, metric_idx):
         pred = result[metric_meta["prediction"]]
         if batch.y.shape[1] == 1:
             targets = batch.y
         else:
             targets = batch.y[:, metric_meta["target"]]
         pred = pred.reshape(targets.shape)
-        if self.cast_to_float64:
-            targets = targets.type(torch.float64)
-            pred = pred.type(torch.float64)
         return pred, targets
 
     def get_metric_names(self, metric_meta, metric_idx=0):

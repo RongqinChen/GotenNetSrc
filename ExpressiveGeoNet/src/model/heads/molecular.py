@@ -11,6 +11,7 @@ from src.model.heads.atomwise import Atomwise
 from src.model.heads.blocks import GatedEquivariantBlock
 from src.model.layers import shifted_softplus
 
+
 class Dipole(nn.Module):
     """Output layer for dipole moment."""
 
@@ -18,7 +19,7 @@ class Dipole(nn.Module):
         self,
         n_in: int,
         n_hidden: Optional[int] = None,
-        activation = F.silu,
+        activation=F.silu,
         property: str = "dipole",
         predict_magnitude: bool = False,
         output_v: bool = True,
@@ -27,7 +28,7 @@ class Dipole(nn.Module):
     ):
         """
         Initialize the Dipole module.
-        
+
         Args:
             n_in (int): Input dimension of atomwise features.
             n_hidden (Optional[int]): Size of hidden layers.
@@ -52,23 +53,36 @@ class Dipole(nn.Module):
 
         self.equivariant_layers = nn.ModuleList(
             [
-                GatedEquivariantBlock(n_sin=n_in, n_vin=n_in, n_sout=n_hidden, n_vout=n_hidden, n_hidden=n_hidden,
-                                      activation=activation,
-                                      sactivation=activation),
-                GatedEquivariantBlock(n_sin=n_hidden, n_vin=n_hidden, n_sout=1, n_vout=1,
-                                      n_hidden=n_hidden, activation=activation)
-            ])
+                GatedEquivariantBlock(
+                    n_sin=n_in,
+                    n_vin=n_in,
+                    n_sout=n_hidden,
+                    n_vout=n_hidden,
+                    n_hidden=n_hidden,
+                    activation=activation,
+                    sactivation=activation,
+                ),
+                GatedEquivariantBlock(
+                    n_sin=n_hidden,
+                    n_vin=n_hidden,
+                    n_sout=1,
+                    n_vout=1,
+                    n_hidden=n_hidden,
+                    activation=activation,
+                ),
+            ]
+        )
         self.requires_dr = False
         self.requires_stress = False
-        self.aggregation_mode = 'sum'
+        self.aggregation_mode = "sum"
 
     def forward(self, inputs):
         """
         Predicts dipole moment.
-        
+
         Args:
             inputs: Input data containing atomic representations.
-            
+
         Returns:
             dict: Dictionary with predicted dipole properties.
         """
@@ -76,12 +90,11 @@ class Dipole(nn.Module):
         l0 = inputs.representation
         l1 = inputs.vector_representation[:, :3, :]
 
-
         for eqlayer in self.equivariant_layers:
             l0, l1 = eqlayer(l0, l1)
 
         if self.stddev is not None:
-            l0 =  self.stddev * l0 + self.mean
+            l0 = self.stddev * l0 + self.mean
 
         atomic_dipoles = torch.squeeze(l1, -1)
         charges = l0
@@ -91,8 +104,9 @@ class Dipole(nn.Module):
         # y = torch.sum(y, dim=1)
         y = torch_scatter.scatter(y, inputs.batch, dim=0, reduce=self.aggregation_mode)
         if self.output_v:
-            y_vector = torch_scatter.scatter(l1, inputs.batch, dim=0, reduce=self.aggregation_mode)
-
+            y_vector = torch_scatter.scatter(
+                l1, inputs.batch, dim=0, reduce=self.aggregation_mode
+            )
 
         if self.predict_magnitude:
             y = torch.norm(y, dim=1, keepdim=True)
@@ -105,13 +119,13 @@ class Dipole(nn.Module):
 
 class ElectronicSpatialExtentV2(Atomwise):
     """Electronic spatial extent prediction module."""
-    
+
     def __init__(
         self,
         n_in: int,
         n_layers: int = 2,
         n_hidden: Optional[int] = None,
-        activation = shifted_softplus,
+        activation=shifted_softplus,
         property: str = "y",
         contributions: Optional[str] = None,
         mean: Optional[torch.Tensor] = None,
@@ -120,7 +134,7 @@ class ElectronicSpatialExtentV2(Atomwise):
     ):
         """
         Initialize the ElectronicSpatialExtentV2 module.
-        
+
         Args:
             n_in (int): Input dimension of atomwise features.
             n_layers (int): Number of layers in the output network.
@@ -151,20 +165,22 @@ class ElectronicSpatialExtentV2(Atomwise):
     def forward(self, inputs):
         """
         Predicts the electronic spatial extent.
-        
+
         Args:
             inputs: Input data containing atomic representations and positions.
-            
+
         Returns:
             dict: Dictionary with predicted electronic spatial extent properties.
         """
         positions = inputs.pos
         x = self.out_net(inputs)
         mass = self.atomic_mass[inputs.z].view(-1, 1)
-        c = scatter(mass * positions, inputs.batch, dim=0) / scatter(mass, inputs.batch, dim=0)
+        c = scatter(mass * positions, inputs.batch, dim=0) / scatter(
+            mass, inputs.batch, dim=0
+        )
 
         yi = torch.norm(positions - c[inputs.batch], dim=1, keepdim=True)
-        yi = yi ** 2 * x
+        yi = yi**2 * x
 
         y = torch_scatter.scatter(yi, inputs.batch, dim=0, reduce=self.aggregation_mode)
 

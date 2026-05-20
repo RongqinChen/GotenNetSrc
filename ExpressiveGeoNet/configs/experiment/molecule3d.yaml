@@ -46,4 +46,4 @@ callbacks:
 
 label: "gap"
 task: "Molecule3D"
-project: "ExpressiveGeoNet_molecule3d"
+project: "ExpGeoNet_molecule3d"

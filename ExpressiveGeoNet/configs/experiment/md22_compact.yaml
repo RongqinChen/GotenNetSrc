@@ -11,4 +11,4 @@ model:
   output:
     n_hidden: 128
 
-project: "ExpressiveGeoNet_md22_compact"
+project: "ExpGeoNet_md22_compact"

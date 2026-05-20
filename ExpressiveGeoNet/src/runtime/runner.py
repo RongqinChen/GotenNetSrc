@@ -25,6 +25,11 @@ from src.runtime.ui import task_wrapper
 log = get_logger(__name__)
 
 
+def _supports_inference_mode(model: LightningModule) -> bool:
+    """Return whether Lightning's inference mode is safe for this model."""
+    return not getattr(model, "requires_force_derivatives", False)
+
+
 @task_wrapper
 def train(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
     """Execute model training and optional best-checkpoint evaluation."""
@@ -57,7 +62,7 @@ def train(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
         callbacks=callbacks,
         logger=loggers,
         _convert_="partial",
-        inference_mode=False,
+        inference_mode=_supports_inference_mode(model),
     )
 
     datamodule.device = model.device
@@ -98,10 +103,14 @@ def train(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
             ckpt_path = runtime_cfg.ckpt_path
 
         log.info("Starting testing.")
-        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path, weights_only=False)
+        trainer.test(
+            model=model, datamodule=datamodule, ckpt_path=ckpt_path, weights_only=False
+        )
 
     if not runtime_cfg.trainer.get("fast_dev_run") and runtime_cfg.get("train"):
-        log.info("Best model checkpoint: %s", trainer.checkpoint_callback.best_model_path)
+        log.info(
+            "Best model checkpoint: %s", trainer.checkpoint_callback.best_model_path
+        )
 
     metric_dict = {**train_metrics, **trainer.callback_metrics}
     return metric_dict, object_dict
@@ -142,6 +151,7 @@ def test(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
         trainer_cfg,
         logger=loggers,
         callbacks=callbacks,
+        inference_mode=_supports_inference_mode(model),
     )
 
     if trainer.logger:
@@ -152,7 +162,7 @@ def test(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
         model=model,
         datamodule=datamodule,
         ckpt_path=runtime_cfg.get("ckpt_path"),
-        weights_only=False
+        weights_only=False,
     )
 
     object_dict = {

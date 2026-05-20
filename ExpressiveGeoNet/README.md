@@ -1,17 +1,17 @@
-# ExpressiveGeoNet
+# ExpGeoNet
 
-`ExpressiveGeoNet` is a script-first reconstruction of the original GotenNet project. It is organized so you can enter the project root and run training directly without installing a package:
+`ExpGeoNet` is a script-first reconstruction of the original GotenNet project. It is organized so you can enter the project root and run training directly without installing a package:
 
 ```bash
 source ~/miniforge3/bin/activate gnn
-cd /Users/chenrq/Study/GotenNetSrc/ExpressiveGeoNet
+cd /Users/chenrq/Study/GotenNetSrc/ExpGeoNet
 python train.py
 ```
 
 ## Layout
 
 ```text
-ExpressiveGeoNet/
+ExpGeoNet/
 ├── train.py
 ├── test.py
 ├── README.md

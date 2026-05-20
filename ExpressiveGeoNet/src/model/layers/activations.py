@@ -21,12 +21,14 @@ def get_split_sizes_from_lmax(lmax):
     """
     return [2 * l + 1 for l in range(1, lmax + 1)]
 
+
 class ShiftedSoftplus(nn.Module):
     """
     Shifted Softplus activation function.
 
     Computes `softplus(x) - log(2)`.
     """
+
     def __init__(self):
         super(ShiftedSoftplus, self).__init__()
         self.shift = torch.log(torch.tensor(2.0)).item()
@@ -41,11 +43,13 @@ class Swish(nn.Module):
 
     Computes `x * sigmoid(x)`. Also known as SiLU.
     """
+
     def __init__(self):
         super(Swish, self).__init__()
 
     def forward(self, x):
         return x * torch.sigmoid(x)
+
 
 act_class_mapping = {
     "ssp": ShiftedSoftplus,
@@ -54,6 +58,7 @@ act_class_mapping = {
     "sigmoid": nn.Sigmoid,
     "swish": Swish,
 }
+
 
 def shifted_softplus(x: torch.Tensor):
     """
@@ -68,6 +73,8 @@ def shifted_softplus(x: torch.Tensor):
         torch.Tensor: Shifted soft-plus of input.
     """
     return F.softplus(x) - math.log(2.0)
+
+
 def normalize_string(s: str) -> str:
     """
     Normalize a string by converting to lowercase and removing dashes, underscores, and spaces.
@@ -78,7 +85,8 @@ def normalize_string(s: str) -> str:
     Returns:
         str: Normalized string.
     """
-    return s.lower().replace('-', '').replace('_', '').replace(' ', '')
+    return s.lower().replace("-", "").replace("_", "").replace(" ", "")
+
 
 def get_activations(optional=False, *args, **kwargs):
     """
@@ -94,20 +102,22 @@ def get_activations(optional=False, *args, **kwargs):
         Dict[str, Optional[Callable]]: Dictionary mapping names to activation functions/classes.
     """
     activations = {
-        normalize_string(act.__name__): act for act in vars(torch.nn.modules.activation).values()
+        normalize_string(act.__name__): act
+        for act in vars(torch.nn.modules.activation).values()
         if isinstance(act, type) and issubclass(act, torch.nn.Module)
     }
-    activations.update({
-        "relu": torch.nn.ReLU,
-        "elu": torch.nn.ELU,
-        "sigmoid": torch.nn.Sigmoid,
-        "silu": torch.nn.SiLU,
-        "mish": torch.nn.Mish,
-        "swish": torch.nn.SiLU,
-        "selu": torch.nn.SELU,
-        "softplus": shifted_softplus,
-    })
-
+    activations.update(
+        {
+            "relu": torch.nn.ReLU,
+            "elu": torch.nn.ELU,
+            "sigmoid": torch.nn.Sigmoid,
+            "silu": torch.nn.SiLU,
+            "mish": torch.nn.Mish,
+            "swish": torch.nn.SiLU,
+            "selu": torch.nn.SELU,
+            "softplus": shifted_softplus,
+        }
+    )
 
     if optional:
         activations[""] = None
@@ -127,16 +137,19 @@ def get_activations_none(optional=False, *args, **kwargs):
         Dict[str, Optional[Callable]]: Dictionary mapping names to activation functions/classes.
     """
     activations = {
-        normalize_string(act.__name__): act for act in vars(torch.nn.modules.activation).values()
+        normalize_string(act.__name__): act
+        for act in vars(torch.nn.modules.activation).values()
         if isinstance(act, type) and issubclass(act, torch.nn.Module)
     }
-    activations.update({
-        "relu": torch.nn.ReLU,
-        "elu": torch.nn.ELU,
-        "sigmoid": torch.nn.Sigmoid,
-        "silu": torch.nn.SiLU,
-        "selu": torch.nn.SELU,
-    })
+    activations.update(
+        {
+            "relu": torch.nn.ReLU,
+            "elu": torch.nn.ELU,
+            "sigmoid": torch.nn.Sigmoid,
+            "silu": torch.nn.SiLU,
+            "selu": torch.nn.SELU,
+        }
+    )
 
     if optional:
         activations[""] = None
@@ -169,6 +182,7 @@ def dictionary_to_option(options, selected):
         activation = activation()
     return activation
 
+
 def str2act(input_str, *args, **kwargs):
     """
     Convert an activation function name string to the corresponding function/class instance.
@@ -180,9 +194,9 @@ def str2act(input_str, *args, **kwargs):
     Returns:
         Optional[Callable]: The instantiated activation function or None.
     """
-    if not input_str: # Handles None and ""
+    if not input_str:  # Handles None and ""
         return None
 
-    act = get_activations(*args, optional=True,  **kwargs)
+    act = get_activations(*args, optional=True, **kwargs)
     out = dictionary_to_option(act, input_str)
     return out

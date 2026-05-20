@@ -12,6 +12,8 @@ from src.model.layers.activations import shifted_softplus
 
 zeros_initializer = partial(constant_, val=0.0)
 log = get_logger(__name__)
+
+
 class ScaleShift(nn.Module):
     """
     Scale and shift layer for standardization.
@@ -22,6 +24,7 @@ class ScaleShift(nn.Module):
         mean (torch.Tensor or float): Mean value (`mu`).
         stddev (torch.Tensor or float): Standard deviation value (`sigma`).
     """
+
     def __init__(self, mean, stddev):
         super(ScaleShift, self).__init__()
         if isinstance(mean, float):
@@ -52,6 +55,7 @@ class GetItem(nn.Module):
     Args:
         key (str): Key of the item to be extracted from the input dictionary.
     """
+
     def __init__(self, key):
         super(GetItem, self).__init__()
         self.key = key
@@ -64,6 +68,7 @@ class GetItem(nn.Module):
             torch.Tensor: layer output.
         """
         return inputs[self.key]
+
 
 class SchnetMLP(nn.Module):
     """
@@ -78,8 +83,9 @@ class SchnetMLP(nn.Module):
         n_layers (int, optional): Total number of layers (including input and output). Defaults to 2.
         activation (callable, optional): Activation function for hidden layers. Defaults to shifted_softplus.
     """
+
     def __init__(
-            self, n_in, n_out, n_hidden=None, n_layers=2, activation=shifted_softplus
+        self, n_in, n_out, n_hidden=None, n_layers=2, activation=shifted_softplus
     ):
         super(SchnetMLP, self).__init__()
         # get list of number of nodes in input, hidden & output layers
@@ -180,6 +186,7 @@ def he_orthogonal_init(tensor):
 
     return tensor
 
+
 def get_weight_init_by_string(init_str):
     """
     Get a weight initialization function based on its string name.
@@ -193,22 +200,23 @@ def get_weight_init_by_string(init_str):
     Raises:
         ValueError: If the initialization string is unknown.
     """
-    if init_str == '':
+    if init_str == "":
         # No-op
         return lambda x: x
-    elif init_str  == 'zeros':
+    elif init_str == "zeros":
         return torch.nn.init.zeros_
-    elif init_str == 'xavier_uniform':
+    elif init_str == "xavier_uniform":
         return torch.nn.init.xavier_uniform_
-    elif init_str == 'glo_orthogonal':
+    elif init_str == "glo_orthogonal":
         return glorot_orthogonal_wrapper_
-    elif init_str == 'he_orthogonal':
+    elif init_str == "he_orthogonal":
         return he_orthogonal_init
     else:
-        raise ValueError(f'Unknown initialization {init_str}')
+        raise ValueError(f"Unknown initialization {init_str}")
 
 
 # train.py -m label=mu,alpha,homo,lumo,r2,zpve,U0,U,H,G,Cv name='${label_str}_int6_glo-ort_3090' hydra.sweeper.n_jobs=1 model.representation.n_interactions=6 model.representation.weight_init=glo_orthogonal
+
 
 class Dense(nn.Linear):
     """
@@ -226,6 +234,7 @@ class Dense(nn.Linear):
         norm (str, optional): Normalization type ('layer', 'batch', 'instance', or None). Defaults to None.
         gain (float, optional): Gain for weight initialization if applicable. Defaults to None.
     """
+
     def __init__(
         self,
         in_features,
@@ -247,11 +256,11 @@ class Dense(nn.Linear):
             self.activation = activation()
         self.activation = activation
 
-        if norm == 'layer':
+        if norm == "layer":
             self.norm = nn.LayerNorm(out_features)
-        elif norm == 'batch':
+        elif norm == "batch":
             self.norm = nn.BatchNorm1d(out_features)
-        elif norm == 'instance':
+        elif norm == "instance":
             self.norm = nn.InstanceNorm1d(out_features)
         else:
             self.norm = None
@@ -285,7 +294,6 @@ class Dense(nn.Linear):
         return y
 
 
-
 class MLP(nn.Module):
     """
     Multi-layer perceptron with configurable hidden dimensions and activations.
@@ -300,6 +308,7 @@ class MLP(nn.Module):
         bias_init (callable, optional): Bias initialization function. Defaults to zeros_initializer.
         norm (str, optional): Normalization type ('layer', 'batch', 'instance', or ''). Defaults to ''.
     """
+
     def __init__(
         self,
         hidden_dims: List[int],
@@ -308,7 +317,7 @@ class MLP(nn.Module):
         last_activation=None,
         weight_init=xavier_uniform_,
         bias_init=zeros_initializer,
-        norm='',
+        norm="",
     ):
         super().__init__()
 
@@ -317,12 +326,17 @@ class MLP(nn.Module):
         dims = hidden_dims
         n_layers = len(dims)
 
-        DenseMLP = partial(Dense, bias=bias, weight_init=weight_init, bias_init=bias_init)
+        DenseMLP = partial(
+            Dense, bias=bias, weight_init=weight_init, bias_init=bias_init
+        )
 
-        self.dense_layers = nn.ModuleList([
+        self.dense_layers = nn.ModuleList(
+            [
                 DenseMLP(dims[i], dims[i + 1], activation=activation, norm=norm)
                 for i in range(n_layers - 2)
-            ] + [DenseMLP(dims[-2], dims[-1], activation=last_activation)])
+            ]
+            + [DenseMLP(dims[-2], dims[-1], activation=last_activation)]
+        )
 
         self.layers = nn.Sequential(*self.dense_layers)
 
@@ -331,7 +345,6 @@ class MLP(nn.Module):
     def reset_parameters(self):
         for m in self.dense_layers:
             m.reset_parameters()
-
 
     def forward(self, x):
         return self.layers(x)

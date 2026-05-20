@@ -1,4 +1,4 @@
-"""Representation modules for ExpressiveGeoNet."""
+"""Representation modules for ExpGeoNet."""
 
 from src.model.representation.encoder import GotenNet, GotenNetWrapper
 

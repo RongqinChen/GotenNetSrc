@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+- qm9_large.yaml
+
+model:
+  lr: 0.00006
+  lr_warmup_steps: 20000
+  lr_patience: 20
+  representation:
+    residual_scale: 0.4
+    edge_residual_scale: 0.2
+
+trainer:
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: norm
+
+project: "ExpGeoNet_qm9_large_stable"

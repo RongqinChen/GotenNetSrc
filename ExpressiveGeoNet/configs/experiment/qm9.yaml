@@ -1,27 +1,28 @@
 # @package _global_
 
 defaults:
-  - override /dataset@datamodule: qm9.yaml
-  - override /model: gotennet.yaml
-  - override /callbacks: default.yaml
-  - override /logger: wandb.yaml # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
-  - override /trainer: default.yaml
+- override /dataset@datamodule: qm9.yaml
+- override /model: gotennet.yaml
+- override /callbacks: default.yaml
+- override /logger: wandb.yaml # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+- override /trainer: default.yaml
 
 datamodule:
   hparams:
     batch_size: 32
     seed: 1
     standardize: false
+    inference_batch_size: 256
+    persistent_workers: true
+    prefetch_factor: 4
 
 model:
-  # Table 6 reports a per-target learning-rate range of [6e-5, 1e-4].
-  # This base config uses the upper bound; override `model.lr` for target-specific sweeps.
   lr: 0.0001
   lr_warmup_steps: 10000
   lr_monitor: "validation/val_loss"
-  lr_minlr: 1.e-07
+  lr_minlr: 1e-7
   lr_patience: 15
-  weight_decay: 0.01
+  weight_decay: 0.001
   task_config:
     task_loss: "MSELoss"
   representation:
@@ -29,17 +30,21 @@ model:
     n_atom_basis: 256
     radial_basis: "expnorm"
     n_rbf: 64
+    attn_dropout: 0.05
   output:
     n_hidden: 256
 
 trainer:
   max_epochs: 1000
-  gradient_clip_val: 10.0
+  gradient_clip_val: 2.0
+  gradient_clip_algorithm: norm
 
 callbacks:
   early_stopping:
-    monitor: "validation/val_loss" # name of the logged metric which determines when model is improving
-    patience: 1000 # keep the paper's fixed 1000-epoch budget by default
+    monitor: "validation/MeanAbsoluteError_${label_str}"
+    patience: 1000
   model_checkpoint:
     _target_: pytorch_lightning.callbacks.ModelCheckpoint
-    monitor: "validation/MeanAbsoluteError_${label_str}" # name of the logged metric which determines when model is improving
+    monitor: "validation/MeanAbsoluteError_${label_str}"
+
+project: "ExpGeoNet_qm9"

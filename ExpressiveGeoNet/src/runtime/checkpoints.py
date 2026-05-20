@@ -70,16 +70,14 @@ def download_file(url: str, save_path: str) -> bool:
                 save_path_opened_for_writing = True
                 # Using tqdm.rich with its default Rich display
                 # No need to pass 'progress' or 'options' for custom columns
-                with (
-                    tqdm_rich_progress_bar(
-                        total=total_size,  # total=None is handled by tqdm (no percentage/ETA)
-                        desc=f"Downloading {os.path.basename(save_path)}",
-                        unit="B",  # Unit for progress (Bytes)
-                        unit_scale=True,  # Automatically scale to KB, MB, etc.
-                        unit_divisor=1024,  # Use 1024 for binary units (KiB, MiB)
-                        # leave=True is default, keeps bar after completion
-                    ) as pbar
-                ):
+                with tqdm_rich_progress_bar(
+                    total=total_size,  # total=None is handled by tqdm (no percentage/ETA)
+                    desc=f"Downloading {os.path.basename(save_path)}",
+                    unit="B",  # Unit for progress (Bytes)
+                    unit_scale=True,  # Automatically scale to KB, MB, etc.
+                    unit_divisor=1024,  # Use 1024 for binary units (KiB, MiB)
+                    # leave=True is default, keeps bar after completion
+                ) as pbar:
                     chunk_size = 8192
                     current_downloaded_size = 0
                     while True:
@@ -215,9 +213,7 @@ def download_checkpoint(checkpoint_url: str) -> str:
                 )
         # --- End of validation logic ---
 
-        local_filename = (
-            f"expressive_geonet_{task}_{size}_{label}.ckpt"
-        )
+        local_filename = f"expressive_geonet_{task}_{size}_{label}.ckpt"
         remote_filename = (
             f"gotennet_{label}.ckpt"  # Canonical local filename for this name
         )

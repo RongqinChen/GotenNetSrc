@@ -31,9 +31,11 @@ def train_val_test_split(
         raise ValueError("At most one of train_size, val_size, test_size may be None.")
 
     # Record which splits were originally floats (needed for rounding correction).
-    float_flags = (isinstance(train_size, float),
-                   isinstance(val_size, float),
-                   isinstance(test_size, float))
+    float_flags = (
+        isinstance(train_size, float),
+        isinstance(val_size, float),
+        isinstance(test_size, float),
+    )
 
     train_size = round(dset_len * train_size) if float_flags[0] else train_size
     val_size = round(dset_len * val_size) if float_flags[1] else val_size
@@ -73,8 +75,8 @@ def train_val_test_split(
     perm = np.random.default_rng(seed).permutation(dset_len)
     return (
         np.array(perm[:train_size]),
-        np.array(perm[train_size:train_size + val_size]),
-        np.array(perm[train_size + val_size:total]),
+        np.array(perm[train_size : train_size + val_size]),
+        np.array(perm[train_size + val_size : total]),
     )
 
 
@@ -95,17 +97,29 @@ def make_splits(
     """
     if splits is not None:
         saved = np.load(splits)
-        idx_train, idx_val, idx_test = saved["idx_train"], saved["idx_val"], saved["idx_test"]
+        idx_train, idx_val, idx_test = (
+            saved["idx_train"],
+            saved["idx_val"],
+            saved["idx_test"],
+        )
     else:
         idx_train, idx_val, idx_test = train_val_test_split(
-            dataset_len, train_size, val_size, test_size, seed,
+            dataset_len,
+            train_size,
+            val_size,
+            test_size,
+            seed,
         )
 
     if filename is not None:
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
         np.savez(filename, idx_train=idx_train, idx_val=idx_val, idx_test=idx_test)
 
-    return torch.from_numpy(idx_train), torch.from_numpy(idx_val), torch.from_numpy(idx_test)
+    return (
+        torch.from_numpy(idx_train),
+        torch.from_numpy(idx_val),
+        torch.from_numpy(idx_test),
+    )
 
 
 class MissingLabelException(Exception):
