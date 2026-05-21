@@ -1,39 +1,47 @@
 # @package _global_
 
 defaults:
-  - molecule3d.yaml
+- molecule3d.yaml
 
 datamodule:
   hparams:
-    batch_size: 64
-    # Molecule3D validation/test do not require force-derivative graphs, so we
-    # can use a larger eval batch than training for better throughput.
-    inference_batch_size: 128
-    persistent_workers: true
-    prefetch_factor: 4
+    batch_size: 256
+    inference_batch_size: 256
+    train_size: null
+    val_size: null
+    test_size: null
+    split_config: Molecule3D_random_split
 
 model:
-  # Keep the same overall training recipe, but make optimisation less spiky
-  # and less over-regularized for higher expected final accuracy.
-  lr: 0.00008
-  lr_warmup_steps: 6000
-  lr_monitor: "validation/MeanAbsoluteError_${label_str}"
-  lr_decay: 0.7
-  lr_patience: 8
-  weight_decay: 0.001
+  lr: 0.0001
+  lr_warmup_steps: 5000
+  lr_monitor: "validation/val_loss"
+  lr_decay: 0.8
+  lr_patience: 5
+  lr_minlr: 1e-7
+  weight_decay: 0.01
+  task_config:
+    task_loss: "L1Loss"
   representation:
-    attn_dropout: 0.05
+    n_interactions: 12
+    n_atom_basis: 384
+    n_rbf: 32
+    edge_updates: true
+    evec_dim: 384
+  output:
+    n_hidden: 384
 
 trainer:
-  gradient_clip_val: 5.0
-  gradient_clip_algorithm: norm
+  max_epochs: 300
+  # Table 6 reports no gradient clipping for Molecule3D.
+  gradient_clip_val: 0.0
 
 callbacks:
   early_stopping:
-    monitor: "validation/MeanAbsoluteError_${label_str}"
-    patience: 80
+    monitor: "validation/val_loss"
+    patience: 300
     min_delta: 1e-5
   model_checkpoint:
-    monitor: "validation/MeanAbsoluteError_${label_str}"
+    monitor: "validation/val_loss"
 
 project: "ExpGeoNet_molecule3d_tuned"
