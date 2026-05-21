@@ -5,17 +5,11 @@ defaults:
 
 datamodule:
   hparams:
-    # Table 6 reports batch size 4 for rMD17. For the paper numbers, keep
-    # training and evaluation on the same batch size.
     batch_size: 4
     inference_batch_size: 4
-    # The paper reports results averaged over the five predefined splits.
-    # This preset keeps split 0 as the single-run default; reproduce the table
-    # by sweeping `datamodule.hparams.splits=0,1,2,3,4` and averaging.
     splits: 0
 
 model:
-  # Paper-aligned optimization from Table 6 / reproduction manifest.
   lr: 0.0002
   lr_warmup_steps: 1000
   lr_monitor: "validation/val_loss"
@@ -25,8 +19,6 @@ model:
   weight_decay: 0.01
   use_ema: false
   representation:
-    # Paper rMD17 base: 12 interaction layers, 192 hidden width, 768 edge
-    # refinement dimension, 32 RBFs, cutoff 5.0, edge updates "linw".
     n_interactions: 12
     n_atom_basis: 192
     n_rbf: 32
@@ -40,8 +32,6 @@ trainer:
 
 callbacks:
   early_stopping:
-    # The paper reports a fixed 3000-epoch budget rather than an early-stop
-    # regime, so stretch patience to cover the full run.
     monitor: "validation/val_loss"
     patience: 3000
     min_delta: 1e-5
