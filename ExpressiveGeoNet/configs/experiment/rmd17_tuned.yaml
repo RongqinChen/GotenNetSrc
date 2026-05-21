@@ -1,41 +1,51 @@
 # @package _global_
 
 defaults:
-  - rmd17.yaml
+- rmd17.yaml
 
 datamodule:
   hparams:
+    # Table 6 reports batch size 4 for rMD17. For the paper numbers, keep
+    # training and evaluation on the same batch size.
     batch_size: 4
-    # Validation / test no longer retain higher-order derivative graphs, so
-    # we can safely recover a much larger evaluation batch here.
-    inference_batch_size: 16
-    persistent_workers: true
-    prefetch_factor: 4
+    inference_batch_size: 4
+    # The paper reports results averaged over the five predefined splits.
+    # This preset keeps split 0 as the single-run default; reproduce the table
+    # by sweeping `datamodule.hparams.splits=0,1,2,3,4` and averaging.
+    splits: 0
 
 model:
-  # Slightly lower LR + longer warmup generally makes the force-training path
-  # less spiky on rMD17 while still converging quickly.
-  lr: 0.00015
-  lr_warmup_steps: 1500
-  lr_monitor: "validation/MeanAbsoluteError_force"
-  lr_decay: 0.7
-  lr_patience: 20
-  # AdamW decay is applied to the full parameter set in this repo, so a
-  # smaller value is a safer high-accuracy default than the paper-style 1e-2.
-  weight_decay: 0.001
+  # Paper-aligned optimization from Table 6 / reproduction manifest.
+  lr: 0.0002
+  lr_warmup_steps: 1000
+  lr_monitor: "validation/val_loss"
+  lr_decay: 0.8
+  lr_patience: 30
+  lr_minlr: 1e-7
+  weight_decay: 0.01
+  use_ema: false
   representation:
-    attn_dropout: 0.05
+    # Paper rMD17 base: 12 interaction layers, 192 hidden width, 768 edge
+    # refinement dimension, 32 RBFs, cutoff 5.0, edge updates "linw".
+    n_interactions: 12
+    n_atom_basis: 192
+    n_rbf: 32
+    edge_updates: "linw"
+    lmax: 2
+    evec_dim: 768
 
 trainer:
-  gradient_clip_val: 5.0
+  gradient_clip_val: 10.0
   gradient_clip_algorithm: norm
 
 callbacks:
   early_stopping:
-    monitor: "validation/MeanAbsoluteError_force"
-    patience: 500
+    # The paper reports a fixed 3000-epoch budget rather than an early-stop
+    # regime, so stretch patience to cover the full run.
+    monitor: "validation/val_loss"
+    patience: 3000
     min_delta: 1e-5
   model_checkpoint:
-    monitor: "validation/MeanAbsoluteError_force"
+    monitor: "validation/val_loss"
 
 project: "ExpGeoNet_rmd17_tuned"
