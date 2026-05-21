@@ -1,0 +1,75 @@
+# @package _global_
+# Molecule3D Original Paper Reproduction Config
+# Based on Table 6 of "GotenNet: Rethinking Efficient 3D Equivariant Graph Neural Networks"
+#
+# Key corrections vs ExpressiveGeoNet molecule3d.yaml:
+#   - n_interactions: 12 (was 6)
+#   - batch_size: 256 (was 64)
+#   - gradient_clip_val: 0.0 (was 10.0) - no gradient clipping per paper
+#   - n_atom_basis: 384 (correct in both)
+#   - lr_warmup_steps: 5000 (correct in both)
+#   - lr_patience: 5 (correct in both)
+#   - weight_decay: 0.0 (was 0.01)
+#     Note: Paper Table 6 does not report weight_decay for Molecule3D;
+#     the official repo uses 0.0. Set to 0.0 to match official baseline.
+#   - evec_dim/emlp_dim explicitly set to 384
+
+defaults:
+  - override /dataset@datamodule: molecule3d.yaml
+  - override /model: gotennet.yaml
+  - override /callbacks: default.yaml
+  - override /logger: csv.yaml
+  - override /trainer: default.yaml
+
+datamodule:
+  hparams:
+    batch_size: 256
+    inference_batch_size: 256
+    seed: 1
+    standardize: true
+
+model:
+  lr: 0.0001
+  lr_warmup_steps: 5000
+  lr_monitor: "validation/val_loss"
+  lr_minlr: 1e-7
+  lr_patience: 5
+  weight_decay: 0.0
+  use_ema: false
+  task_config:
+    task_loss: "L1Loss"
+  representation:
+    n_interactions: 12
+    n_atom_basis: 384
+    radial_basis: "expnorm"
+    n_rbf: 32
+    attn_dropout: 0.0
+    edge_updates: True
+    lmax: 2
+    scale_edge: false
+    sep_dir: true
+    sep_tensor: true
+    sep_htr: true
+    evec_dim: 384
+    emlp_dim: 384
+    weight_init: "xavier_uniform"
+    bias_init: "zeros"
+    aggr: "add"
+    num_heads: 8
+  output:
+    n_hidden: 384
+
+trainer:
+  max_epochs: 300
+  gradient_clip_val: 0.0
+
+callbacks:
+  early_stopping:
+    monitor: "validation/val_loss"
+    patience: 300
+  model_checkpoint:
+    monitor: "validation/val_loss"
+
+label: "gap"
+task: "Molecule3D"
+project: "ExpGeoNet_molecule3d_original"

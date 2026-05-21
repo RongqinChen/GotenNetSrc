@@ -1,0 +1,81 @@
+# @package _global_
+# MD22 Original Paper Reproduction Config (GotenNetB - Base)
+# Based on Table 6 of "GotenNet: Rethinking Efficient 3D Equivariant Graph Neural Networks"
+#
+# Paper settings (md22_base):
+#   - n_interactions: 6, n_atom_basis: 256
+#   - edge_dim: 256, edge_refinement_dim: 768
+#   - cutoff: 5.0, n_rbf: 32
+#   - edge_updates: "linw"
+#   - lr: [4e-5, 1e-4] (per-system, config uses upper bound 1e-4)
+#   - warmup_steps: 1000, lr_patience: 30
+#   - weight_decay: 0.01
+#   - loss: MSE, loss_weights: [0.05, 0.95]
+#   - gradient_clip_val: 5.0
+#   - max_epochs: 3000, batch_size: 4
+
+defaults:
+  - override /dataset@datamodule: md22.yaml
+  - override /model: gotennet.yaml
+  - override /callbacks: default.yaml
+  - override /logger: csv.yaml
+  - override /trainer: default.yaml
+
+datamodule:
+  hparams:
+    seed: 1
+    standardize: true
+    batch_size: 4
+    inference_batch_size: 4
+
+label: "at_at"
+model:
+  lr: 0.0001
+  lr_warmup_steps: 1000
+  lr_monitor: "validation/val_loss"
+  lr_decay: 0.8
+  lr_minlr: 1e-7
+  lr_patience: 30
+  weight_decay: 0.01
+  use_ema: true
+  task_config:
+    task_loss: "MSELoss"
+    ema_rates:
+      - 0.05
+      - 1.00
+    loss_weights:
+      - 0.05
+      - 0.95
+  representation:
+    n_interactions: 6
+    n_atom_basis: 256
+    radial_basis: "expnorm"
+    n_rbf: 32
+    edge_updates: "linw"
+    lmax: 2
+    evec_dim: 768
+    emlp_dim: 768
+    attn_dropout: 0.0
+    sep_dir: true
+    sep_tensor: true
+    sep_htr: true
+    aggr: "add"
+    num_heads: 8
+  output:
+    n_hidden: 256
+
+trainer:
+  max_epochs: 3000
+  inference_mode: False
+  gradient_clip_val: 5.0
+  gradient_clip_algorithm: norm
+
+callbacks:
+  early_stopping:
+    monitor: "validation/val_loss"
+    patience: 3000
+  model_checkpoint:
+    monitor: "validation/val_loss"
+
+project: "ExpGeoNet_md22_original"
+task: "MD22"

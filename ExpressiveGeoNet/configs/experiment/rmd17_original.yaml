@@ -1,0 +1,82 @@
+# @package _global_
+# rMD17 Original Paper Reproduction Config
+# Based on Table 6 of "GotenNet: Rethinking Efficient 3D Equivariant Graph Neural Networks"
+#
+# Key corrections vs ExpressiveGeoNet rmd17.yaml:
+#   - n_interactions: 12 (was 10)
+#   - weight_decay: 0.01 (was 0.001)
+#   - lr_warmup_steps: 1000 (was 1500)
+#   - lr_patience: 30 (was 20)
+#   - lr_decay: 0.8 (was 0.7)
+#   - gradient_clip_val: 10.0 (was 5.0)
+#   - batch_size: 4 (was 24)
+#   - evec_dim: 768 (was 512)
+#   - lr_monitor: val_loss (was MAE_force)
+#   - use_ema: true (was missing)
+#   - ema_rates enabled for loss tracking
+
+defaults:
+  - override /dataset@datamodule: rmd17.yaml
+  - override /model: gotennet.yaml
+  - override /callbacks: default.yaml
+  - override /logger: csv.yaml
+  - override /trainer: default.yaml
+
+datamodule:
+  hparams:
+    seed: 1
+    standardize: true
+    splits: 0
+    batch_size: 4
+    inference_batch_size: 4
+
+model:
+  lr: 0.0002
+  lr_warmup_steps: 1000
+  lr_monitor: "validation/val_loss"
+  lr_decay: 0.8
+  lr_patience: 30
+  lr_minlr: 1e-7
+  weight_decay: 0.01
+  use_ema: true
+  task_config:
+    task_loss: "MSELoss"
+    ema_rates:
+      - 0.05
+      - 1.00
+    loss_weights:
+      - 0.05
+      - 0.95
+  representation:
+    n_interactions: 12
+    n_atom_basis: 192
+    radial_basis: "expnorm"
+    n_rbf: 32
+    edge_updates: "linw"
+    lmax: 2
+    evec_dim: 768
+    emlp_dim: 768
+    attn_dropout: 0.0
+    sep_dir: true
+    sep_tensor: true
+    sep_htr: true
+    aggr: "add"
+    num_heads: 8
+  output:
+    n_hidden: 256
+
+trainer:
+  max_epochs: 3000
+  inference_mode: False
+  gradient_clip_val: 10.0
+  gradient_clip_algorithm: norm
+
+callbacks:
+  early_stopping:
+    monitor: "validation/val_loss"
+    patience: 1000
+  model_checkpoint:
+    monitor: "validation/val_loss"
+
+project: "ExpGeoNet_rmd17_original"
+task: "rMD17"

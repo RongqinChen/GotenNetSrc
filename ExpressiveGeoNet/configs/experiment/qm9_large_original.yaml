@@ -1,0 +1,13 @@
+# @package _global_
+# QM9 Large Original Paper Reproduction Config (GotenNetL)
+# Paper Table 6: n_interactions=12, n_atom_basis=256
+
+defaults:
+  - qm9_original.yaml
+
+model:
+  lr: 0.00006
+  representation:
+    n_interactions: 12
+
+project: "ExpGeoNet_qm9_large_original"
