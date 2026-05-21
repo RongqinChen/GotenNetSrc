@@ -646,7 +646,10 @@ class GATA(MessagePassing):
         if self.scale_edge:
             norm = torch.sqrt(n_edges.reshape(-1, 1, 1)) / np.sqrt(self.n_atom_basis)
         else:
-            norm = 1.0
+            # Keep scaled dot-product attention even when edge-count scaling is
+            # disabled. Without the 1/sqrt(d) factor, deeper / wider Molecule3D
+            # runs can produce saturated attention logits and blow up to NaN.
+            norm = 1.0 / np.sqrt(self.n_atom_basis)
 
         attn = attn * norm
         self._alpha = attn
