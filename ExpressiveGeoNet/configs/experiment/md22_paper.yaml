@@ -1,0 +1,59 @@
+# @package _global_
+
+defaults:
+  - md22.yaml
+
+# Paper-aligned MD22 base reproduction config.
+# Table 6 reports a per-system learning-rate range [4e-5, 1e-4]; this config
+# uses the upper bound by default and should be overridden per molecule when a
+# lower LR is needed to match the reported result more closely.
+
+datamodule:
+  hparams:
+    seed: 1
+    standardize: true
+    batch_size: 4
+    inference_batch_size: 4
+
+label: "at_at"
+
+model:
+  lr: 0.0001
+  lr_warmup_steps: 1000
+  lr_monitor: "validation/val_loss"
+  lr_decay: 0.8
+  lr_minlr: 1e-7
+  lr_patience: 30
+  weight_decay: 0.01
+  task_config:
+    task_loss: "MSELoss"
+    loss_weights:
+      - 0.05
+      - 0.95
+  representation:
+    n_interactions: 6
+    n_atom_basis: 256
+    radial_basis: "expnorm"
+    n_rbf: 32
+    attn_dropout: 0.1
+    edge_updates: "linw"
+    lmax: 2
+    evec_dim: 768
+  output:
+    n_hidden: 256
+
+trainer:
+  max_epochs: 3000
+  inference_mode: False
+  gradient_clip_val: 5.0
+
+callbacks:
+  early_stopping:
+    monitor: "validation/val_loss"
+    patience: 3000
+  model_checkpoint:
+    monitor: "validation/val_loss"
+
+project: "ExpGeoNet_md22_paper"
+
+task: "MD22"
