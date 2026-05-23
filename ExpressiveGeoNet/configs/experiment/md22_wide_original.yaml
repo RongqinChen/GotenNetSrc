@@ -6,6 +6,7 @@ defaults:
   - md22_original.yaml
 
 model:
+  cutoff: 4.0
   representation:
     n_interactions: 8
     n_atom_basis: 384

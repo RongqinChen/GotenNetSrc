@@ -1,18 +1,7 @@
 # @package _global_
 
 defaults:
-  - md22.yaml
-
-model:
-  cutoff: 4.0
-  representation:
-    n_interactions: 8
-    n_atom_basis: 384
-    evec_dim: 768
-    cutoff_fn:
-      __target__: src.model.layers.CosineCutoff
-      cutoff: 4.0
-  output:
-    n_hidden: 384
+  - md22_wide_original.yaml
+  - override /logger: wandb.yaml
 
 project: "ExpGeoNet_md22_wide"

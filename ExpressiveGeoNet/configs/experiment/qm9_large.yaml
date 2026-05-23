@@ -1,27 +1,7 @@
 # @package _global_
 
 defaults:
-- qm9.yaml
-
-model:
-  lr: 0.00006
-  lr_warmup_steps: 20000
-  lr_patience: 20
-  representation:
-    n_interactions: 12
-    weight_init: "glo_orthogonal"
-    residual_scale: 0.5
-    edge_residual_scale: 0.25
-    edge_updates: "linw_ln_gated"
-    edge_ln: "layer"
-    scale_edge: True
-
-datamodule:
-  hparams:
-    inference_batch_size: 32
-
-trainer:
-  gradient_clip_val: 2.0
-  gradient_clip_algorithm: norm
+  - qm9_large_original.yaml
+  - override /logger: wandb.yaml
 
 project: "ExpGeoNet_qm9_large"

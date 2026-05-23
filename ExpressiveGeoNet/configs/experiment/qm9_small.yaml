@@ -1,10 +1,7 @@
 # @package _global_
 
 defaults:
-  - qm9.yaml
-
-model:
-  representation:
-    n_interactions: 4
+  - qm9_small_original.yaml
+  - override /logger: wandb.yaml
 
 project: "ExpGeoNet_qm9_small"

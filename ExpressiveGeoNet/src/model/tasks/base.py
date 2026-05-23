@@ -34,13 +34,9 @@ class Task:
         self.representation = representation
         self.label_key = label_key
         self.dataset_meta = dataset_meta
-        # Keep optimization losses in the model's native dtype by default, but
-        # allow opting into fp64 for experiments that truly need it.
-        self.cast_to_float64 = self.config.get("cast_to_float64", False)
-        # Metrics are cheap enough to normalize to fp32 for more consistent
-        # logging, especially if a run later enables reduced-precision compute.
+        self.cast_to_float64 = self.config.get("cast_to_float64", True)
         self.cast_metrics_to_float32 = self.config.get(
-            "cast_metrics_to_float32", True
+            "cast_metrics_to_float32", False
         )
 
     def _select_outputs(self, batch, result, metric_meta, metric_idx):

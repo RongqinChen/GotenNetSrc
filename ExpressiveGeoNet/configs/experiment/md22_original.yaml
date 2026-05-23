@@ -13,6 +13,7 @@
 #   - loss: MSE, loss_weights: [0.05, 0.95]
 #   - gradient_clip_val: 5.0
 #   - max_epochs: 3000, batch_size: 4
+#   - layernorm/steerable_norm/edge_ln: disabled (not surfaced in Table 6; matches official default)
 
 defaults:
   - override /dataset@datamodule: md22.yaml
@@ -56,6 +57,9 @@ model:
     evec_dim: 768
     emlp_dim: 768
     attn_dropout: 0.0
+    layernorm: ""
+    steerable_norm: ""
+    edge_ln: ""
     sep_dir: true
     sep_tensor: true
     sep_htr: true
@@ -72,10 +76,10 @@ trainer:
 
 callbacks:
   early_stopping:
-    monitor: "validation/val_loss"
+    monitor: "validation/val_loss_og"
     patience: 3000
   model_checkpoint:
-    monitor: "validation/val_loss"
+    monitor: "validation/val_loss_og"
 
 project: "ExpGeoNet_md22_original"
 task: "MD22"

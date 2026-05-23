@@ -9,6 +9,7 @@
 #   - lr_monitor: val_loss (was MAE)
 #   - evec_dim/emlp_dim explicitly set
 #   - edge_updates: True (was missing, relying on model default)
+#   - layernorm/steerable_norm/edge_ln: disabled to match the paper/official default path
 #   - standardize: false (correct for QM9)
 
 defaults:
@@ -47,6 +48,9 @@ model:
     edge_updates: True
     lmax: 2
     scale_edge: false
+    layernorm: ""
+    steerable_norm: ""
+    edge_ln: ""
     sep_dir: true
     sep_tensor: true
     sep_htr: true
@@ -69,6 +73,6 @@ callbacks:
     monitor: "validation/val_loss"
     patience: 1000
   model_checkpoint:
-    monitor: "validation/val_loss"
+    monitor: "validation/MeanAbsoluteError_${label_str}"
 
 project: "ExpGeoNet_qm9_original"

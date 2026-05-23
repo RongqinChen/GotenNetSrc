@@ -380,40 +380,18 @@ class GotenModel(pl.LightningModule):
 
     # ── Loss ──────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _ema_total_log_key(phase_name: str) -> str:
-        """Return the aggregate EMA log key for a given phase."""
-        if phase_name == "validation":
-            return "validation/ema_val_loss"
-        return f"{phase_name}/ema_loss"
-
     def calculate_loss(
         self,
         batch,
         result: dict,
         name: Optional[str] = None,
     ) -> torch.Tensor:
-        """Compute the total raw loss and optionally log detached EMA diagnostics.
-
-        Parameters
-        ----------
-        batch : Data
-            Input batch (provides labels).
-        result : dict
-            Output of ``_apply_output_heads``.
-        name : str or None
-            Phase name (``"train"``, ``"validation"``, or ``None`` for no logging).
-
-        Returns
-        -------
-        torch.Tensor
-            Raw aggregated loss (scalar) used for optimization.
-        """
+        """Compute the task loss, matching the official gotennet EMA semantics."""
         device = self.device
         dtype = self.dtype
 
         total_loss = torch.tensor(0.0, device=device, dtype=dtype)
-        ema_total = (
+        raw_total = (
             torch.tensor(0.0, device=device, dtype=dtype)
             if self.use_ema and name is not None
             else None
@@ -434,84 +412,50 @@ class GotenModel(pl.LightningModule):
             else:
                 raw_loss = loss_fn(result[loss_cfg["prediction"]])
 
-            # 2. Accumulate the raw loss for optimization.
-            total_loss = total_loss + loss_cfg["loss_weight"] * raw_loss
+            if raw_total is not None:
+                raw_total = raw_total + loss_cfg["loss_weight"] * raw_loss
 
-            # 3. Update detached EMA diagnostics strictly for logging.
-            ema_loss = None
-            if ema_total is not None:
-                ema_loss = self._update_ema_and_get_smoothed(
-                    loss_cfg,
-                    raw_loss,
-                    name,
-                )
-                ema_total = ema_total + loss_cfg["loss_weight"] * ema_loss
+            logged_loss = raw_loss
+            ema_addon = ""
+            if (
+                "ema_rate" in loss_cfg
+                and name in loss_cfg["ema_stages"]
+                and (1.0 > loss_cfg["ema_rate"] > 0.0)
+            ):
+                ema_key = f"{name}_{loss_cfg['target']}"
+                ema_addon = "_ema"
+                if self.ema[ema_key] is None:
+                    self.ema[ema_key] = raw_loss.detach()
+                else:
+                    smoothed = (
+                        loss_cfg["ema_rate"] * raw_loss
+                        + (1 - loss_cfg["ema_rate"]) * self.ema[ema_key]
+                    )
+                    self.ema[ema_key] = smoothed.detach()
+                    if self.use_ema:
+                        logged_loss = smoothed
 
-            # 4. Log the individual loss component(s).
             if name is not None:
-                log_key = f"{name}/{loss_cfg['prediction']}_loss"
                 self.log(
-                    log_key,
-                    raw_loss,
+                    f"{name}/{loss_cfg['prediction']}{ema_addon}_loss",
+                    logged_loss,
                     on_step=(name == "train"),
                     on_epoch=True,
                     prog_bar=(name == "train"),
                     batch_size=self._get_num_graphs(batch),
                 )
-                if ema_loss is not None:
-                    self.log(
-                        f"{name}/{loss_cfg['prediction']}_ema_loss",
-                        ema_loss,
-                        on_step=(name == "train"),
-                        on_epoch=True,
-                        prog_bar=False,
-                        batch_size=self._get_num_graphs(batch),
-                    )
+            total_loss = total_loss + loss_cfg["loss_weight"] * logged_loss
 
-        if ema_total is not None:
+        if raw_total is not None:
             self.log(
-                self._ema_total_log_key(name),
-                ema_total,
+                f"{name}/val_loss_og",
+                raw_total,
                 on_step=(name == "train"),
                 on_epoch=True,
                 batch_size=self._get_num_graphs(batch),
             )
 
         return total_loss
-
-    def _update_ema_and_get_smoothed(
-        self,
-        loss_cfg: dict,
-        current_loss: torch.Tensor,
-        phase_name: Optional[str],
-    ) -> torch.Tensor:
-        """Update and return detached EMA-smoothed diagnostics for *current_loss*.
-
-        EMA is used only for logging/monitoring and never changes the raw
-        optimization objective returned by :meth:`calculate_loss`.
-        """
-        ema_rate = loss_cfg.get("ema_rate")
-        ema_stages = loss_cfg.get("ema_stages", [])
-        if (
-            not self.use_ema
-            or ema_rate is None
-            or phase_name is None
-            or phase_name not in ema_stages
-            or not (0.0 < ema_rate < 1.0)
-        ):
-            return current_loss
-
-        ema_key = f"{phase_name}_{loss_cfg['target']}"
-        smoothed = self.ema[ema_key]
-
-        if smoothed is None:
-            self.ema[ema_key] = current_loss.detach()
-        else:
-            smoothed = ema_rate * current_loss + (1.0 - ema_rate) * smoothed
-            self.ema[ema_key] = smoothed.detach()
-            current_loss = smoothed
-
-        return current_loss
 
     # ── Optimizer ─────────────────────────────────────────────────────
 

@@ -1,49 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /dataset@datamodule: molecule3d.yaml
-  - override /model: gotennet.yaml
-  - override /callbacks: default.yaml
-  - override /logger: wandb.yaml # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
-  - override /trainer: default.yaml
+  - molecule3d_original.yaml
+  - override /logger: wandb.yaml
 
-datamodule:
-  hparams:
-    batch_size: 64
-    inference_batch_size: 64
-    seed: 1
-    standardize: true
-
-model:
-  lr: 0.0001
-  lr_warmup_steps: 5000
-  lr_monitor: "validation/val_loss"
-  lr_minlr: 1.e-07
-  lr_patience: 5
-  weight_decay: 0.01
-  task_config:
-    task_loss: "L1Loss"
-  representation:
-    n_interactions: 6
-    n_atom_basis: 384
-    radial_basis: "expnorm"
-    n_rbf: 32
-    evec_dim: 384
-  output:
-    n_hidden: 384
-
-trainer:
-  max_epochs: 300
-  gradient_clip_val: 10.0
-
-callbacks:
-  early_stopping:
-    monitor: "validation/val_loss" # name of the logged metric which determines when model is improving
-    patience: 300 # match the paper's 300-epoch training budget
-  model_checkpoint:
-    _target_: pytorch_lightning.callbacks.ModelCheckpoint
-    monitor: "validation/MeanAbsoluteError_${label_str}" # name of the logged metric which determines when model is improving
-
-label: "gap"
-task: "Molecule3D"
 project: "ExpGeoNet_molecule3d"

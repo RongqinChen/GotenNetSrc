@@ -222,12 +222,12 @@ class GATA(MessagePassing):
         dropout: float = 0.0,
         edge_updates: Union[bool, str] = True,
         last_layer: bool = False,
-        scale_edge: bool = False,
+        scale_edge: bool = True,
         evec_dim: Optional[int] = None,
         emlp_dim: Optional[int] = None,
         sep_htr: bool = True,
-        sep_dir: bool = True,
-        sep_tensor: bool = True,
+        sep_dir: bool = False,
+        sep_tensor: bool = False,
         lmax: int = 2,
         edge_ln: str = "",
         residual_scale: float = 1.0,
@@ -272,7 +272,7 @@ class GATA(MessagePassing):
         # Parse edge update configuration
         update_info = {
             "gated": False,
-            "rej": False,
+            "rej": True,
             "mlp": False,
             "mlpa": False,
             "lin_w": 0,
@@ -283,7 +283,6 @@ class GATA(MessagePassing):
         allowed_parts = [
             "gated",
             "gatedt",
-            "rej",
             "norej",
             "norm",
             "mlp",
@@ -306,8 +305,6 @@ class GATA(MessagePassing):
             update_info["gated"] = "gatedt"
         if "act" in update_parts:
             update_info["gated"] = "act"
-        if "rej" in update_parts:
-            update_info["rej"] = True
         if "norej" in update_parts:
             update_info["rej"] = False
         if "mlp" in update_parts:
@@ -924,16 +921,16 @@ class GotenNet(nn.Module):
         layernorm: str = "",
         steerable_norm: str = "",
         num_heads: int = 8,
-        attn_dropout: float = 0.1,
+        attn_dropout: float = 0.0,
         edge_updates: Union[bool, str] = True,
-        scale_edge: bool = False,
-        lmax: int = 2,
+        scale_edge: bool = True,
+        lmax: int = 1,
         aggr: str = "add",
         evec_dim: Optional[int] = None,
         emlp_dim: Optional[int] = None,
         sep_htr: bool = True,
-        sep_dir: bool = True,
-        sep_tensor: bool = True,
+        sep_dir: bool = False,
+        sep_tensor: bool = False,
         edge_ln: str = "",
         residual_scale: float = 1.0,
         edge_residual_scale: float = 1.0,
@@ -1008,18 +1005,6 @@ class GotenNet(nn.Module):
         self.sphere = e3nn.o3.SphericalHarmonics(
             self.sh_irreps, normalize=False, normalization="norm"
         )
-        self.steerable_init = SteerableInit(
-            n_atom_basis=self.n_atom_basis,
-            activation=activation,
-            aggr=aggr,
-            weight_init=weight_init,
-            bias_init=bias_init,
-            cutoff=self.cutoff,
-            num_heads=num_heads,
-            lmax=lmax,
-            sep_dir=sep_dir,
-        )
-
         self.gata_list = nn.ModuleList(
             [
                 GATA(
@@ -1080,7 +1065,6 @@ class GotenNet(nn.Module):
     def reset_parameters(self):
         self.node_init.reset_parameters()
         self.edge_init.reset_parameters()
-        self.steerable_init.reset_parameters()
         for l in self.gata_list:
             l.reset_parameters()
         for l in self.eqff_list:
@@ -1121,18 +1105,9 @@ class GotenNet(nn.Module):
         )
         n_edges = num_edges[edge_index[0]]
 
-        h.unsqueeze_(1)
-        X = self.steerable_init(
-            edge_index=edge_index,
-            h=h,
-            rl_ij=rl_ij,
-            t_ij=t_ij_init,
-            r_ij=edge_diff,
-        )
-
         hs = h.shape
-        if X is None:
-            X = torch.zeros((hs[0], equi_dim, hs[2]), device=h.device)
+        X = torch.zeros((hs[0], equi_dim, hs[1]), device=h.device)
+        h.unsqueeze_(1)
         t_ij = t_ij_init
         for _i, (gata, eqff) in enumerate(
             zip(self.gata_list, self.eqff_list, strict=False)

@@ -224,22 +224,8 @@ class Atomwise(nn.Module):
         self.negative_dr = negative_dr
         self.standardize = standardize
 
-        if mean is None:
-            mean = torch.tensor([0.0], dtype=torch.float32)
-        elif isinstance(mean, float):
-            mean = torch.tensor([mean], dtype=torch.float32)
-        else:
-            mean = mean.detach().clone().float()
-
-        if stddev is None:
-            stddev = torch.tensor([1.0], dtype=torch.float32)
-        elif isinstance(stddev, float):
-            stddev = torch.tensor([stddev], dtype=torch.float32)
-        else:
-            stddev = stddev.detach().clone().float()
-
-        self.register_buffer("mean", mean)
-        self.register_buffer("stddev", stddev)
+        mean = torch.FloatTensor([0.0]) if mean is None else mean
+        stddev = torch.FloatTensor([1.0]) if stddev is None else stddev
 
         if type(activation) is str:
             activation = str2act(activation)
@@ -260,12 +246,11 @@ class Atomwise(nn.Module):
         else:
             self.out_net = outnet
 
-        if self.standardize:
-            log.info(
-                "Using graph-level standardization with mean %s and stddev %s",
-                self.mean,
-                self.stddev,
-            )
+        if self.standardize and (mean is not None and stddev is not None):
+            log.info(f"Using standardization with mean {mean} and stddev {stddev}")
+            self.standardize = ScaleShift(mean, stddev)
+        else:
+            self.standardize = nn.Identity()
 
         self.aggregation_mode = aggregation_mode
 
@@ -304,8 +289,7 @@ class Atomwise(nn.Module):
         else:
             yi = self.out_net(inputs)
 
-        if self.standardize:
-            yi = yi * self.stddev
+        yi = self.standardize(yi)
 
         if self.atomref is not None:
             y0 = self.atomref(atomic_numbers)
@@ -315,12 +299,8 @@ class Atomwise(nn.Module):
             y = torch_scatter.scatter(
                 yi, inputs.batch, dim=0, reduce=self.aggregation_mode
             )
-            if self.standardize:
-                # Dataset statistics are graph-level, so only shift once after
-                # aggregating atomic contributions into a graph prediction.
-                y = y + self.mean
         else:
-            y = yi + self.mean if self.standardize else yi
+            y = yi
 
         # collect results
         result[self.property] = y

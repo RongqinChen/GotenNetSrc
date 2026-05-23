@@ -5,14 +5,14 @@
 # Key corrections vs ExpressiveGeoNet molecule3d.yaml:
 #   - n_interactions: 12 (was 6)
 #   - batch_size: 256 (was 64)
-#   - gradient_clip_val: 0.0 (was 10.0) - no gradient clipping per paper
+#   - gradient_clip_val: 0.0 (was 10.0) - Table 6 disables clipping for Molecule3D
 #   - n_atom_basis: 384 (correct in both)
 #   - lr_warmup_steps: 5000 (correct in both)
 #   - lr_patience: 5 (correct in both)
-#   - weight_decay: 0.0 (was 0.01)
-#     Note: Paper Table 6 does not report weight_decay for Molecule3D;
-#     the official repo uses 0.0. Set to 0.0 to match official baseline.
+#   - weight_decay: 0.01 (paper Table 6; official repo uses a different 0.0 setting)
+#   - attn_dropout: 0.1 (paper Table 6 dropout rate)
 #   - evec_dim/emlp_dim explicitly set to 384
+#   - layernorm/steerable_norm/edge_ln: disabled to match the paper/official default path
 
 defaults:
   - override /dataset@datamodule: molecule3d.yaml
@@ -34,7 +34,7 @@ model:
   lr_monitor: "validation/val_loss"
   lr_minlr: 1e-7
   lr_patience: 5
-  weight_decay: 0.0
+  weight_decay: 0.01
   use_ema: false
   task_config:
     task_loss: "L1Loss"
@@ -43,10 +43,13 @@ model:
     n_atom_basis: 384
     radial_basis: "expnorm"
     n_rbf: 32
-    attn_dropout: 0.0
+    attn_dropout: 0.1
     edge_updates: True
     lmax: 2
     scale_edge: false
+    layernorm: ""
+    steerable_norm: ""
+    edge_ln: ""
     sep_dir: true
     sep_tensor: true
     sep_htr: true
@@ -68,7 +71,7 @@ callbacks:
     monitor: "validation/val_loss"
     patience: 300
   model_checkpoint:
-    monitor: "validation/val_loss"
+    monitor: "validation/MeanAbsoluteError_${label_str}"
 
 label: "gap"
 task: "Molecule3D"

@@ -11,9 +11,10 @@
 #   - gradient_clip_val: 10.0 (was 5.0)
 #   - batch_size: 4 (was 24)
 #   - evec_dim: 768 (was 512)
-#   - lr_monitor: val_loss (was MAE_force)
+#   - lr_monitor: val_loss (EMA-smoothed total loss, matching official gotennet)
 #   - use_ema: true (was missing)
 #   - ema_rates enabled for loss tracking
+#   - layernorm/steerable_norm/edge_ln: disabled (not surfaced in Table 6; matches official default)
 
 defaults:
   - override /dataset@datamodule: rmd17.yaml
@@ -57,6 +58,9 @@ model:
     evec_dim: 768
     emlp_dim: 768
     attn_dropout: 0.0
+    layernorm: ""
+    steerable_norm: ""
+    edge_ln: ""
     sep_dir: true
     sep_tensor: true
     sep_htr: true
@@ -73,10 +77,10 @@ trainer:
 
 callbacks:
   early_stopping:
-    monitor: "validation/val_loss"
+    monitor: "validation/val_loss_og"
     patience: 1000
   model_checkpoint:
-    monitor: "validation/val_loss"
+    monitor: "validation/val_loss_og"
 
 project: "ExpGeoNet_rmd17_original"
 task: "rMD17"
